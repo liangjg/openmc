@@ -186,24 +186,22 @@ contains
 
     allocate(dd % domain_n_procs(dd % n_domains))
 
-    ! TODO: different matching strategies can to be explored, and support for
-    ! having one processes handle multiple domains needs to be added.
-    call distribute_load_peak_shaving(dd)
+    ! TODO: add support for having one process handle multiple domains
+    call distribute_domain_load(dd)
 
   end subroutine calculate_domain_n_procs
 
 !===============================================================================
-! DISTRIBUTE_LOAD_PEAK_SHAVING attempts to distribute avialable processes across
+! DISTRIBUTE_DOMAIN_LOAD attempts to distribute avialable processes across
 ! domains according to an un-normalized distribution specified at runtime
 !===============================================================================
 
-  subroutine distribute_load_peak_shaving(dd)
+  subroutine distribute_domain_load(dd)
 
     type(DomainDecomType), intent(inout) :: dd
 
     integer                :: d
-    integer                :: max_
-    logical                :: forward
+    integer                :: max_loc(1)
     real(8), allocatable   :: frac_nodes(:)
 
     allocate(frac_nodes(dd % n_domains))
@@ -221,42 +219,21 @@ contains
     ! make sense if a domain is completely unreachable, outside of the problem
     ! boundary conditions (e.g., corner nodes with BEAVRS when using a
     ! StructuredMesh domain mesh
-    dd % domain_n_procs = max(1, ceiling(frac_nodes))
+    dd % domain_n_procs = 1
 
-    ! Perform a simple symmetric peak-shaving to make it match
-    forward = .true.
-    do while (sum(dd % domain_n_procs) > n_procs)
-      max_ = maxval(dd % domain_n_procs)
+    ! Make load match with fractions
+    do while (sum(dd % domain_n_procs) < n_procs)
+      ! Find the domain which has maximal average load
+      max_loc = maxloc(frac_nodes/dd % domain_n_procs)
 
-      if (forward) then
-
-        do d = 1, dd % n_domains
-          if (dd % domain_n_procs(d) == max_) then
-            dd % domain_n_procs(d) = dd % domain_n_procs(d) - 1
-            exit
-          end if
-        end do
-
-        forward = .false.
-
-      else
-
-        do d = dd % n_domains, 1, -1
-          if (dd % domain_n_procs(d) == max_) then
-            dd % domain_n_procs(d) = dd % domain_n_procs(d) - 1
-            exit
-          end if
-        end do
-
-        forward = .true.
-
-      end if
+      ! Add one process to this domain
+      dd % domain_n_procs(max_loc(1)) = dd % domain_n_procs(max_loc(1)) + 1
 
     end do
 
     deallocate(frac_nodes)
 
-  end subroutine distribute_load_peak_shaving
+  end subroutine distribute_domain_load
 
 !===============================================================================
 ! SET_NEIGHBOR_BINS determines the domain meshbins for the neighbors of the
