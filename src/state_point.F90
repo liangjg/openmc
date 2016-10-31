@@ -133,6 +133,8 @@ contains
              domain_decomp % n_interactions_all)
         call write_dataset(dd_group, "nodemap", &
              domain_decomp % domain_load_dist)
+        call write_dataset(dd_group, "domain_n_procs", &
+             domain_decomp % domain_n_procs)
 
         ! work_index of current batch. For dd runs, source banks are divided
         ! according to domains, so they are not uniformly distributed on
@@ -947,14 +949,6 @@ contains
       if (domain_decomp % local_master) then
         domain_decomp % n_interaction = &
              domain_decomp % n_interactions_all(domain_decomp % meshbin)
-      end if
-
-      ! Check load distribution
-      allocate(domain_load_temp(domain_decomp % n_domains))
-      call read_dataset(domain_load_temp, dd_group, "nodemap")
-      if (any(domain_load_temp - domain_decomp % domain_load_dist /= 0)) then
-        call fatal_error("The domain load nodemap in state point file &
-                         &is different from current run!")
       end if
 
       ! Read work_index of current batch, and re-allocate source bank

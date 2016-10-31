@@ -62,6 +62,8 @@ class StatePoint(object):
         Number of particle interactions in all domains
     domain_nodemap : numpy.ndarray
         Load ditribution of all domains
+    domain_n_procs : numpy.ndarray
+        Process ditribution of all domains
     domain_work_index : numpy.ndarray
         Work ditribution of all processes in current batch
     domain_decomp_mesh : openmc.Mesh
@@ -252,6 +254,13 @@ class StatePoint(object):
     def domain_nodemap(self):
         if self.domain_decomp_on:
             return self._f['domain_decomp/nodemap'].value
+        else:
+            return None
+
+    @property
+    def domain_n_procs(self):
+        if self.domain_decomp_on:
+            return self._f['domain_decomp/domain_n_procs'].value
         else:
             return None
 

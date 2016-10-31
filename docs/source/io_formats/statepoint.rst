@@ -90,6 +90,10 @@ if (domain_decomp_on):
 
         Load ditribution of all domains.
 
+    **/domain_decomp/domain_n_procs** (*int[]*)
+
+        Process ditribution of all domains.
+
     **/domain_decomp/work_index** (*int[]*)
 
         Work ditribution (source bank size) of all proceses.
