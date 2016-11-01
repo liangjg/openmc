@@ -20,7 +20,7 @@ module dd_comm
   use stl_vector,       only: VectorInt
 
 #ifdef MPI
-  use mpi
+  use message_passing
 #endif
 
   implicit none
@@ -972,7 +972,7 @@ contains
       ! process
       if (neighbor /= dd % rank .and. n > 0) then
         n_request = n_request + 1
-        call MPI_ISEND(temp_sites(index_local), n, MPI_BANK, neighbor, &
+        call MPI_ISEND(temp_sites(index_local), int(n), MPI_BANK, neighbor, &
              dd % rank, dd % comm, request(n_request), mpi_err)
       end if
 
@@ -1017,7 +1017,7 @@ contains
         ! asynchronous receive for the source sites
 
         n_request = n_request + 1
-        call MPI_IRECV(source_bank(index_local), n, MPI_BANK, &
+        call MPI_IRECV(source_bank(index_local), int(n), MPI_BANK, &
              neighbor, neighbor, dd % comm, request(n_request), mpi_err)
 
       else

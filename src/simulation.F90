@@ -52,7 +52,7 @@ contains
     if (.not. restart_run) call initialize_source()
 
     ! For dd runs, send source sites to the processes they'll be transported on
-    if (dd_run)  call distribute_source(domain_decomp)
+    if (dd_run) call distribute_source(domain_decomp)
 
     ! Display header
     if (master) then
@@ -186,8 +186,8 @@ contains
         call p % clear()
         p % coord(1) % universe = BASE_UNIVERSE
         p % n_coord = 1
-        p % coord(1) % xyz =  p % stored_xyz
-        p % coord(1) % uvw =  p % stored_uvw
+        p % coord(1) % xyz = p % stored_xyz
+        p % coord(1) % uvw = p % stored_uvw
 
         ! Multi-gruop case
         if (.not. run_CE) then

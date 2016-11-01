@@ -2970,14 +2970,12 @@ contains
       ! Send number of filters
       n_request = n_request + 1
       call MPI_ISEND(n_filters, 1, MPI_INTEGER, &
-           0, reduce_rank, &
-           reduce_comm, request(n_request), mpi_err)
+           0, reduce_rank, reduce_comm, request(n_request), mpi_err)
 
       ! Send filter maps
       n_request = n_request + 1
       call MPI_ISEND(proc_filter_map(:,1), n_filters, MPI_INTEGER, &
-           0, reduce_rank, &
-           reduce_comm, request(n_request), mpi_err)
+           0, reduce_rank, reduce_comm, request(n_request), mpi_err)
 
     end if
 

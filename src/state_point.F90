@@ -555,12 +555,10 @@ contains
       if (.not. master) then
 #ifdef MPI
         ! Send size
-        call MPI_SEND(n, 1, MPI_INTEGER, 0, 0, otf_comm, &
-                      MPI_STATUS_IGNORE, mpi_err)
+        call MPI_SEND(n, 1, MPI_INTEGER, 0, 0, otf_comm, mpi_err)
 
         ! Send map
-        call MPI_SEND(filter_map, n, MPI_INTEGER, 0, 1, otf_comm, &
-                      MPI_STATUS_IGNORE, mpi_err)
+        call MPI_SEND(filter_map, n, MPI_INTEGER, 0, 1, otf_comm, mpi_err)
         deallocate(filter_map)
 
         ! Send OTF results
@@ -568,8 +566,7 @@ contains
         allocate(tally_temp(2, m, n))
         tally_temp(1,:,:) = tallyresult_temp(:,:) % sum
         tally_temp(2,:,:) = tallyresult_temp(:,:) % sum_sq
-        call MPI_SEND(tally_temp, m*n*2, MPI_REAL8, 0, 2, otf_comm, &
-                      MPI_STATUS_IGNORE, mpi_err)
+        call MPI_SEND(tally_temp, m*n*2, MPI_REAL8, 0, 2, otf_comm, mpi_err)
         deallocate(tallyresult_temp)
         deallocate(tally_temp)
 #endif

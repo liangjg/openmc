@@ -10,7 +10,7 @@ module dd_init
   use string,     only: to_str
 
 #ifdef MPI
-  use mpi
+  use message_passing
 #endif
 
   implicit none
@@ -200,7 +200,6 @@ contains
 
     type(DomainDecomType), intent(inout) :: dd
 
-    integer                :: d
     integer                :: max_loc(1)
     real(8), allocatable   :: frac_nodes(:)
 
