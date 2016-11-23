@@ -2922,135 +2922,150 @@ contains
     ! moving things around a lot, which can be slow.  After that phase
     ! though, all the tally bins on each other process are in the same order
     ! and thus simple MPI_REDUCE can be done
-    ! TODO: add in the phase logical and implement MPI_REDUCE as if ordered
 
-    !=======================================================================
-    ! SEND MAPS TO LOCAL MASTER
-
+    ! Get mpi group info
     reduce_master = .false.
     call MPI_COMM_SIZE(reduce_comm, reduce_n_procs, mpi_err)
     call MPI_COMM_RANK(reduce_comm, reduce_rank, mpi_err)
     if (reduce_rank == 0) reduce_master = .true.
 
-    ! Master needs to know the max number of filter bins
-    call MPI_REDUCE(t % next_filter_idx, max_filters, 1, MPI_INTEGER, &
-         MPI_MAX, 0, reduce_comm, mpi_err)
+    ! All processes needs to know the max number of filter bins
+    call MPI_ALLREDUCE(t % next_filter_idx - 1, max_filters, 1, MPI_INTEGER, &
+         MPI_MAX, reduce_comm, mpi_err)
 
-    n_request = 0
-    if (reduce_master) then
+    ! If number of filter bins increased on any process, we need to update maps;
+    ! otherwise, tally bins unchanged, skip this step
+    if (max_filters > t % last_otf_reduce_filters) then
 
-      allocate(proc_n_filters(reduce_n_procs - 1))
-      allocate(proc_filter_map(max_filters, reduce_n_procs - 1))
+      !=========================================================================
+      ! SEND MAPS TO LOCAL MASTER
 
-      ! Receive filter information from all other procs in domain
-      do p = 1, reduce_n_procs - 1
+      n_request = 0
+      if (reduce_master) then
 
-        ! Receive number of filters
+        allocate(proc_n_filters(reduce_n_procs - 1))
+        allocate(proc_filter_map(max_filters, reduce_n_procs - 1))
+
+        ! Receive filter information from all other procs in domain
+        do p = 1, reduce_n_procs - 1
+
+          ! Receive number of filters
+          n_request = n_request + 1
+          call MPI_IRECV(proc_n_filters(p), 1, MPI_INTEGER, &
+               p, p, reduce_comm, request(n_request), mpi_err)
+
+          ! Receive filter maps
+          n_request = n_request + 1
+          call MPI_IRECV(proc_filter_map(:,p), max_filters, MPI_INTEGER, &
+               p, p, reduce_comm, request(n_request), mpi_err)
+
+        end do
+
+      else
+
+        ! Build filter map
+        n_filters = t % next_filter_idx - 1
+        allocate(proc_filter_map(n_filters, 1))
+        do j = 1, n_filters
+          real_bin = t % reverse_filter_index_map % get_key(j)
+          proc_filter_map(j, 1) = real_bin
+        end do
+
+        ! Send number of filters
         n_request = n_request + 1
-        call MPI_IRECV(proc_n_filters(p), 1, MPI_INTEGER, p, p, &
-             reduce_comm, request(n_request), mpi_err)
+        call MPI_ISEND(n_filters, 1, MPI_INTEGER, &
+             0, reduce_rank, reduce_comm, request(n_request), mpi_err)
 
-        ! Receive filter maps
+        ! Send filter maps
         n_request = n_request + 1
-        call MPI_IRECV(proc_filter_map(:,p), max_filters, MPI_INTEGER, p, &
-             p, reduce_comm, request(n_request), mpi_err)
+        call MPI_ISEND(proc_filter_map(:,1), n_filters, MPI_INTEGER, &
+             0, reduce_rank, reduce_comm, request(n_request), mpi_err)
 
-      end do
+      end if
 
-    else
+      ! Wait for filter information to synchronize
+      call MPI_WAITALL(n_request, request, MPI_STATUSES_IGNORE, mpi_err)
 
-      ! Build filter map
-      n_filters = t % next_filter_idx - 1
-      allocate(proc_filter_map(n_filters, 1))
-      do j = 1, n_filters
-        real_bin = t % reverse_filter_index_map % get_key(j)
-        proc_filter_map(j, 1) = real_bin
-      end do
+      !=========================================================================
+      ! SYNCHRONIZE MAPS
 
-      ! Send number of filters
-      n_request = n_request + 1
-      call MPI_ISEND(n_filters, 1, MPI_INTEGER, &
-           0, reduce_rank, reduce_comm, request(n_request), mpi_err)
+      if (reduce_master) then
 
-      ! Send filter maps
-      n_request = n_request + 1
-      call MPI_ISEND(proc_filter_map(:,1), n_filters, MPI_INTEGER, &
-           0, reduce_rank, reduce_comm, request(n_request), mpi_err)
+        ! go through all received filter maps and add space
+        do p = 1, reduce_n_procs - 1
+          do j = 1, proc_n_filters(p)
+            real_bin = proc_filter_map(j, p)
+            idx = t % otf_filter_index(real_bin)
+          end do
+        end do
 
-    end if
+        ! Build filter map
+        deallocate(proc_filter_map)
+        n_filters = t % next_filter_idx - 1
+        allocate(proc_filter_map(n_filters, 1))
+        do j = 1, n_filters
+          real_bin = t % reverse_filter_index_map % get_key(j)
+          proc_filter_map(j, 1) = real_bin
+        end do
 
-    ! Wait for filter information to synchronize
-    call MPI_WAITALL(n_request, request, MPI_STATUSES_IGNORE, mpi_err)
+        ! reorder results
+        allocate(tally_temp(t % total_score_bins, n_filters))
+        tally_temp = t % results(:,:) % value
 
-    !=======================================================================
-    ! SYNCHRONIZE MAPS
+        ! broadcast the updated master n_filter
+        call MPI_BCAST(n_filters, 1, MPI_INTEGER, 0, reduce_comm, mpi_err)
 
-    if (reduce_master) then
+        ! broadcast the updated master filter map
+        call MPI_BCAST(proc_filter_map(:, 1), n_filters, MPI_INTEGER, 0, &
+             reduce_comm, mpi_err)
 
-      ! go through all received filter maps and add space
-      do p = 1, reduce_n_procs - 1
-        do j = 1, proc_n_filters(p)
-          real_bin = proc_filter_map(j, p)
+      else
+
+        ! receive master n_filters
+        call MPI_BCAST(n_filters, 1, MPI_INTEGER, 0, reduce_comm, mpi_err)
+
+        deallocate(proc_filter_map)
+        allocate(proc_filter_map(n_filters, 1))
+
+        ! recieve master filter map
+        call MPI_BCAST(proc_filter_map(:, 1), n_filters, MPI_INTEGER, 0, &
+             reduce_comm, mpi_err)
+
+        ! reorder results according to master map
+        allocate(tally_temp(t % total_score_bins, n_filters))
+        do j = 1, n_filters
+          real_bin = proc_filter_map(j, 1)
+          idx = t % otf_filter_index(real_bin)
+          tally_temp(:, j) = t % results(:, idx) % value
+        end do
+
+        ! reset the tally filter map to match the master
+        call t % filter_index_map % clear()
+        t % next_filter_idx = 1
+        do j = 1, n_filters
+          real_bin = proc_filter_map(j, 1)
           idx = t % otf_filter_index(real_bin)
         end do
-      end do
 
-      ! Build filter map
-      deallocate(proc_filter_map)
-      n_filters = t % next_filter_idx - 1
-      allocate(proc_filter_map(n_filters, 1))
-      do j = 1, n_filters
-        real_bin = t % reverse_filter_index_map % get_key(j)
-        proc_filter_map(j, 1) = real_bin
-      end do
+      end if
 
-      ! broadcast the updated master n_filter
-      call MPI_BCAST(n_filters, 1, MPI_INTEGER, 0, reduce_comm, mpi_err)
-
-      ! broadcast the updated master filter map
-      call MPI_BCAST(proc_filter_map(:, 1), n_filters, MPI_INTEGER, 0, &
-           reduce_comm, mpi_err)
+      ! Update last_otf_reduce_filters
+      t % last_otf_reduce_filters = n_filters
 
     else
 
-      ! receive master n_filters
-      call MPI_BCAST(n_filters, 1, MPI_INTEGER, 0, reduce_comm, mpi_err)
-
-      deallocate(proc_filter_map)
-      allocate(proc_filter_map(n_filters, 1))
-
-      ! recieve master filter map
-      call MPI_BCAST(proc_filter_map(:, 1), n_filters, MPI_INTEGER, 0, &
-           reduce_comm, mpi_err)
-
-      ! reorder results according to master map
-      allocate(tally_temp(t % total_score_bins, n_filters))
-      do j = 1, n_filters
-        real_bin = proc_filter_map(j, 1)
-        idx = t % otf_filter_index(real_bin)
-        tally_temp(:, j) = t % results(:, idx) % value
-      end do
-
-      ! reset the tally filter map to match the master
-      call t % filter_index_map % clear()
-      t % next_filter_idx = 1
-      do j = 1, n_filters
-        real_bin = proc_filter_map(j, 1)
-        idx = t % otf_filter_index(real_bin)
-      end do
+      ! All processes have the same filter map already
+      n_filters = t % next_filter_idx - 1
+      tally_temp = t % results(:,:) % value
 
     end if
 
-    !=======================================================================
+    !===========================================================================
     ! REDUCE TALLY RESULTS
 
     n_bins = t % total_score_bins * n_filters
 
     if (reduce_master) then
-
-      ! TODO: add otf phasing, which would move this outside of here
-      allocate(tally_temp(t % total_score_bins, n_filters))
-      tally_temp = t % results(:,:) % value
 
       ! Receive results arrays from other procs
       call MPI_REDUCE(MPI_IN_PLACE, tally_temp, n_bins, MPI_REAL8, &

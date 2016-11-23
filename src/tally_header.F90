@@ -89,6 +89,9 @@ module tally_header
     ! Next index in the results array when variable
     integer :: next_filter_idx = 1
 
+    ! Total number of filter bins in the last on-the-fly reduce
+    integer :: last_otf_reduce_filters = 0
+
     ! reset property - allows a tally to be reset after every batch
     logical :: reset = .false.
 
