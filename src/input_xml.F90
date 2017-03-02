@@ -7,7 +7,7 @@ module input_xml
   use distribution_multivariate
   use distribution_univariate
   use endf,             only: reaction_name
-  use energy_grid,      only: grid_method, n_log_bins
+  use energy_grid,      only: n_log_bins
   use error,            only: fatal_error, warning
   use geometry_header,  only: Cell, Lattice, RectLattice, HexLattice, &
                               get_temperatures, root_universe

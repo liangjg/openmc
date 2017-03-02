@@ -7,7 +7,6 @@ module energy_grid
 
   implicit none
 
-  integer :: grid_method ! how to treat the energy grid
   integer :: n_log_bins  ! number of bins for logarithmic grid
   real(8) :: log_spacing ! spacing on logarithmic grid
 
@@ -36,7 +35,7 @@ contains
 
     ! Create equally log-spaced energy grid
     allocate(umesh(0:M))
-    umesh(:) = [(i*log_spacing, i=0, M)]
+    umesh(:) = [(exp(i*log_spacing)*E_min, i=0, M)]
 
     do i = 1, n_nuclides_total
       associate (nuc => nuclides(i))
@@ -48,7 +47,7 @@ contains
           ! equal-logarithmic grid
           j = 1
           do k = 0, M
-            do while (log(nuc % grid(t) % energy(j + 1)/E_min) <= umesh(k))
+            do while (nuc % grid(t) % energy(j + 1) <= umesh(k))
               ! Ensure that for isotopes where maxval(nuc % energy) << E_max
               ! that there are no out-of-bounds issues.
               if (j + 1 == size(nuc % grid(t) % energy)) exit

@@ -133,12 +133,11 @@ contains
 ! given index in the nuclides array at the energy of the given particle
 !===============================================================================
 
-  subroutine calculate_nuclide_xs(i_nuclide, i_sab, E, i_log_union, sqrtkT)
+  subroutine calculate_nuclide_xs(i_nuclide, i_sab, E, i_log, sqrtkT)
     integer, intent(in) :: i_nuclide ! index into nuclides array
     integer, intent(in) :: i_sab     ! index into sab_tables array
     real(8), intent(in) :: E         ! energy
-    integer, intent(in) :: i_log_union ! index into logarithmic mapping array or
-                                       ! material union energy grid
+    integer, intent(in) :: i_log     ! index into logarithmic mapping array
     real(8), intent(in) :: sqrtkT    ! Square root of kT, material dependent
 
     logical :: use_mp ! true if XS can be calculated with windowed multipole
@@ -222,8 +221,8 @@ contains
           else
             ! Determine bounding indices based on which equal log-spaced
             ! interval the energy is in
-            i_low  = grid % grid_index(i_log_union)
-            i_high = grid % grid_index(i_log_union + 1) + 1
+            i_low  = grid % grid_index(i_log)
+            i_high = grid % grid_index(i_log + 1) + 1
 
             ! Perform binary search over reduced range
             i_grid = binary_search(grid % energy(i_low:i_high), &

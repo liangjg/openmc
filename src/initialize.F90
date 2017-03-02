@@ -11,7 +11,7 @@ module initialize
   use constants
   use dict_header,     only: DictIntInt, ElemKeyValueII
   use set_header,      only: SetInt
-  use energy_grid,     only: logarithmic_grid, grid_method
+  use energy_grid,     only: logarithmic_grid
   use error,           only: fatal_error, warning
   use geometry,        only: neighbor_lists, count_instance, calc_offsets, &
                              maximum_levels
