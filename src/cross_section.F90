@@ -240,16 +240,16 @@ contains
           micro_xs(i_nuclide) % interp_factor = f
 
           ! Calculate microscopic nuclide total cross section
-          micro_xs(i_nuclide) % total = (ONE - f) * xs % total(i_grid) &
-               + f * xs % total(i_grid + 1)
+          micro_xs(i_nuclide) % total = (ONE - f) * xs % xs(1, i_grid) &
+               + f * xs % xs(1, i_grid + 1)
 
           ! Calculate microscopic nuclide elastic cross section
-          micro_xs(i_nuclide) % elastic = (ONE - f) * xs % elastic(i_grid) &
-               + f * xs % elastic(i_grid + 1)
+          micro_xs(i_nuclide) % elastic = (ONE - f) * xs % xs(2, i_grid) &
+               + f * xs % xs(2, i_grid + 1)
 
           ! Calculate microscopic nuclide absorption cross section
-          micro_xs(i_nuclide) % absorption = (ONE - f) * xs % absorption( &
-               i_grid) + f * xs % absorption(i_grid + 1)
+          micro_xs(i_nuclide) % absorption = (ONE - f) * xs % xs(3, i_grid) &
+               + f * xs % xs(3, i_grid + 1)
 
           ! Initialize nuclide cross-sections to zero
           micro_xs(i_nuclide) % fission    = ZERO
@@ -257,12 +257,12 @@ contains
 
           if (nuc % fissionable) then
             ! Calculate microscopic nuclide total cross section
-            micro_xs(i_nuclide) % fission = (ONE - f) * xs % fission(i_grid) &
-                 + f * xs % fission(i_grid + 1)
+            micro_xs(i_nuclide) % fission = (ONE - f) * xs % xs(4, i_grid) &
+                 + f * xs % xs(4, i_grid + 1)
 
             ! Calculate microscopic nuclide nu-fission cross section
-            micro_xs(i_nuclide) % nu_fission = (ONE - f) * xs % nu_fission( &
-                 i_grid) + f * xs % nu_fission(i_grid + 1)
+            micro_xs(i_nuclide) % nu_fission = (ONE - f) * xs % xs(5, i_grid) &
+                 + f * xs % xs(5, i_grid + 1)
           end if
         end associate
       end if

@@ -5329,8 +5329,9 @@ contains
 
         ! Copy 0K energy grid and elastic scattering cross section
         call move_alloc(TO=nuc % energy_0K, FROM=resonant_nuc % grid(1) % energy)
-        call move_alloc(TO=nuc % elastic_0K, FROM=resonant_nuc % sum_xs(1) % elastic)
         nuc % n_grid_0K = size(nuc % energy_0K)
+        allocate(nuc % elastic_0K(size(resonant_nuc % sum_xs(1) % xs)))
+        nuc % elastic_0K(:) = resonant_nuc % sum_xs(1) % xs(2, :)
 
         ! Build CDF for 0K elastic scattering
         xs_cdf_sum = ZERO
