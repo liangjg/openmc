@@ -124,9 +124,8 @@ module nuclide_header
 !===============================================================================
 
   type NuclideMicroXS
-    integer :: index_grid      ! index on nuclide energy grid
     integer :: index_temp      ! temperature index for nuclide
-    real(8) :: last_E = ZERO   ! last evaluated energy
+    integer :: index_grid      ! index on nuclide energy grid
     real(8) :: interp_factor   ! interpolation factor on nuc. energy grid
     real(8) :: total           ! microscropic total xs
     real(8) :: elastic         ! microscopic elastic scattering xs
@@ -136,15 +135,16 @@ module nuclide_header
 
     ! Information for S(a,b) use
     integer :: index_sab          ! index in sab_tables (zero means no table)
-    integer :: last_index_sab = 0 ! index in sab_tables last used by this nuclide
     integer :: index_temp_sab     ! temperature index for sab_tables
     real(8) :: elastic_sab        ! microscopic elastic scattering on S(a,b) table
 
     ! Information for URR probability table use
     logical :: use_ptable  ! in URR range with probability tables?
 
-    ! Information for Doppler broadening
-    real(8) :: last_sqrtkT = ZERO  ! Last temperature in sqrt(Boltzmann
+    ! Information last used by this nuclide
+    integer :: last_index_sab = 0  ! last index in sab_tables
+    real(8) :: last_E = ZERO       ! last evaluated energy
+    real(8) :: last_sqrtkT = ZERO  ! last temperature in sqrt(Boltzmann
                                    ! constant * temperature (eV))
   end type NuclideMicroXS
 

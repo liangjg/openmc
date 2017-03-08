@@ -195,7 +195,7 @@ contains
         kT = sqrtkT**2
         select case (temperature_method)
         case (TEMPERATURE_NEAREST)
-          i_temp = minloc(abs(nuclides(i_nuclide) % kTs - kT), dim=1)
+          i_temp = minloc(abs(nuc % kTs - kT), dim=1)
 
         case (TEMPERATURE_INTERPOLATION)
           ! Find temperatures that bound the actual temperature
@@ -216,8 +216,6 @@ contains
 
           if (E < grid % energy(1)) then
             i_grid = 1
-          elseif (E > grid % energy(size(grid % energy))) then
-            i_grid = size(grid % energy) - 1
           else
             ! Determine bounding indices based on which equal log-spaced
             ! interval the energy is in
@@ -241,10 +239,6 @@ contains
           micro_xs(i_nuclide) % index_grid    = i_grid
           micro_xs(i_nuclide) % interp_factor = f
 
-          ! Initialize nuclide cross-sections to zero
-          micro_xs(i_nuclide) % fission    = ZERO
-          micro_xs(i_nuclide) % nu_fission = ZERO
-
           ! Calculate microscopic nuclide total cross section
           micro_xs(i_nuclide) % total = (ONE - f) * xs % total(i_grid) &
                + f * xs % total(i_grid + 1)
@@ -256,6 +250,10 @@ contains
           ! Calculate microscopic nuclide absorption cross section
           micro_xs(i_nuclide) % absorption = (ONE - f) * xs % absorption( &
                i_grid) + f * xs % absorption(i_grid + 1)
+
+          ! Initialize nuclide cross-sections to zero
+          micro_xs(i_nuclide) % fission    = ZERO
+          micro_xs(i_nuclide) % nu_fission = ZERO
 
           if (nuc % fissionable) then
             ! Calculate microscopic nuclide total cross section
@@ -293,8 +291,8 @@ contains
         end if
       end if
 
-      micro_xs(i_nuclide) % last_E = E
       micro_xs(i_nuclide) % last_index_sab = i_sab
+      micro_xs(i_nuclide) % last_E = E
       micro_xs(i_nuclide) % last_sqrtkT = sqrtkT
     end associate
 
