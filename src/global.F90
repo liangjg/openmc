@@ -74,7 +74,7 @@ module global
 
   ! Cross section caches
   type(NuclideMicroXS), allocatable :: micro_xs(:)  ! Cache for each nuclide
-  type(MaterialMacroXS)             :: material_xs  ! Cache for current material
+  real(8), dimension(5)             :: material_xs  ! Cache for current material
 
   ! Dictionaries to look up cross sections and listings
   type(DictCharInt) :: nuclide_dict

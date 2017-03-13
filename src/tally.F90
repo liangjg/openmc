@@ -132,7 +132,7 @@ contains
           else
             score = p % last_wgt
           end if
-          score = score / material_xs % total * flux
+          score = score / material_xs(C_TOT) * flux
 
         else
           ! For flux, we need no cross section
@@ -155,9 +155,9 @@ contains
 
         else
           if (i_nuclide > 0) then
-            score = micro_xs(i_nuclide) % total * atom_density * flux
+            score = micro_xs(i_nuclide) % sumxs(C_TOT) * atom_density * flux
           else
-            score = material_xs % total * flux
+            score = material_xs(C_TOT) * flux
           end if
         end if
 
@@ -185,7 +185,7 @@ contains
 
           ! Score the flux weighted inverse velocity with velocity in units of
           ! cm/s
-          score = score / material_xs % total &
+          score = score / material_xs(C_TOT) &
                / (sqrt(TWO * E / MASS_NEUTRON_EV) * C_LIGHT * 100.0_8) * flux
 
         else
@@ -207,10 +207,10 @@ contains
         else
           ! Note SCORE_SCATTER_N not available for tracklength/collision.
           if (i_nuclide > 0) then
-            score = (micro_xs(i_nuclide) % total &
-                 - micro_xs(i_nuclide) % absorption) * atom_density * flux
+            score = (micro_xs(i_nuclide) % sumxs(C_TOT) - &
+                 micro_xs(i_nuclide) % sumxs(C_ABS)) * atom_density * flux
           else
-            score = (material_xs % total - material_xs % absorption) * flux
+            score = (material_xs(C_TOT) - material_xs(C_ABS)) * flux
           end if
         end if
 
@@ -335,9 +335,9 @@ contains
 
         else
           if (i_nuclide > 0) then
-            score = micro_xs(i_nuclide) % absorption * atom_density * flux
+            score = micro_xs(i_nuclide) % sumxs(C_ABS) * atom_density * flux
           else
-            score = material_xs % absorption * flux
+            score = material_xs(C_ABS) * flux
           end if
         end if
 
@@ -348,9 +348,9 @@ contains
             ! No fission events occur if survival biasing is on -- need to
             ! calculate fraction of absorptions that would have resulted in
             ! fission
-            if (micro_xs(p % event_nuclide) % absorption > ZERO) then
-              score = p % absorb_wgt * micro_xs(p % event_nuclide) % fission &
-                   / micro_xs(p % event_nuclide) % absorption * flux
+            if (micro_xs(p % event_nuclide) % sumxs(C_ABS) > ZERO) then
+              score = p % absorb_wgt * micro_xs(p % event_nuclide) % sumxs(C_FIS) &
+                   / micro_xs(p % event_nuclide) % sumxs(C_ABS) * flux
             else
               score = ZERO
             end if
@@ -360,15 +360,15 @@ contains
             ! All fission events will contribute, so again we can use
             ! particle's weight entering the collision as the estimate for the
             ! fission reaction rate
-            score = p % last_wgt * micro_xs(p % event_nuclide) % fission &
-                 / micro_xs(p % event_nuclide) % absorption * flux
+            score = p % last_wgt * micro_xs(p % event_nuclide) % sumxs(C_FIS)&
+                 / micro_xs(p % event_nuclide) % sumxs(C_ABS) * flux
           end if
 
         else
           if (i_nuclide > 0) then
-            score = micro_xs(i_nuclide) % fission * atom_density * flux
+            score = micro_xs(i_nuclide) % sumxs(C_FIS) * atom_density * flux
           else
-            score = material_xs % fission * flux
+            score = material_xs(C_FIS) * flux
           end if
         end if
 
@@ -390,9 +390,9 @@ contains
             ! No fission events occur if survival biasing is on -- need to
             ! calculate fraction of absorptions that would have resulted in
             ! nu-fission
-            if (micro_xs(p % event_nuclide) % absorption > ZERO) then
-              score = p % absorb_wgt * micro_xs(p % event_nuclide) % &
-                   nu_fission / micro_xs(p % event_nuclide) % absorption * flux
+            if (micro_xs(p % event_nuclide) % sumxs(C_ABS) > ZERO) then
+              score = p % absorb_wgt * micro_xs(p % event_nuclide) % sumxs(&
+                   C_NUFIS) / micro_xs(p % event_nuclide) % sumxs(C_ABS) * flux
             else
               score = ZERO
             end if
@@ -409,9 +409,9 @@ contains
 
         else
           if (i_nuclide > 0) then
-            score = micro_xs(i_nuclide) % nu_fission * atom_density * flux
+            score = micro_xs(i_nuclide) % sumxs(C_NUFIS) * atom_density * flux
           else
-            score = material_xs % nu_fission * flux
+            score = material_xs(C_NUFIS) * flux
           end if
         end if
 
@@ -440,10 +440,10 @@ contains
             ! No fission events occur if survival biasing is on -- need to
             ! calculate fraction of absorptions that would have resulted in
             ! prompt-nu-fission
-            if (micro_xs(p % event_nuclide) % absorption > ZERO) then
-                score = p % absorb_wgt * micro_xs(p % event_nuclide) % fission &
+            if (micro_xs(p % event_nuclide) % sumxs(C_ABS) > ZERO) then
+                score = p % absorb_wgt * micro_xs(p % event_nuclide) % sumxs(C_FIS) &
                      * nuclides(p % event_nuclide) % nu(E, EMISSION_PROMPT) &
-                     / micro_xs(p % event_nuclide) % absorption * flux
+                     / micro_xs(p % event_nuclide) % sumxs(C_ABS) * flux
             else
               score = ZERO
             end if
@@ -461,7 +461,7 @@ contains
 
         else
           if (i_nuclide > 0) then
-              score = micro_xs(i_nuclide) % fission * nuclides(i_nuclide) % &
+              score = micro_xs(i_nuclide) % sumxs(C_FIS) * nuclides(i_nuclide) % &
                    nu(E, EMISSION_PROMPT) * atom_density * flux
           else
 
@@ -477,7 +477,7 @@ contains
               i_nuc = materials(p % material) % nuclide(l)
 
               ! Accumulate the contribution from each nuclide
-              score = score + micro_xs(i_nuc) % fission * nuclides(i_nuc) % &
+              score = score + micro_xs(i_nuc) % sumxs(C_FIS) * nuclides(i_nuc) % &
                    nu(E, EMISSION_PROMPT) * atom_density_ * flux
             end do
           end if
@@ -512,7 +512,7 @@ contains
             ! No fission events occur if survival biasing is on -- need to
             ! calculate fraction of absorptions that would have resulted in
             ! delayed-nu-fission
-            if (micro_xs(p % event_nuclide) % absorption > ZERO .and. &
+            if (micro_xs(p % event_nuclide) % sumxs(C_ABS) > ZERO .and. &
                  nuclides(p % event_nuclide) % fissionable) then
 
               ! Check if the delayed group filter is present
@@ -533,8 +533,8 @@ contains
 
                     ! Compute the score and tally to bin
                     score = p % absorb_wgt * yield &
-                         * micro_xs(p % event_nuclide) % fission &
-                         / micro_xs(p % event_nuclide) % absorption * flux
+                         * micro_xs(p % event_nuclide) % sumxs(C_FIS) &
+                         / micro_xs(p % event_nuclide) % sumxs(C_ABS) * flux
                     call score_fission_delayed_dg(t, d_bin, score, score_index)
                   end do
                   cycle SCORE_LOOP
@@ -543,9 +543,9 @@ contains
                 ! If the delayed group filter is not present, compute the score
                 ! by multiplying the absorbed weight by the fraction of the
                 ! delayed-nu-fission xs to the absorption xs
-                score = p % absorb_wgt * micro_xs(p % event_nuclide) % fission &
+                score = p % absorb_wgt * micro_xs(p % event_nuclide) % sumxs(C_FIS) &
                      * nuclides(p % event_nuclide) % nu(E, EMISSION_DELAYED) &
-                     / micro_xs(p % event_nuclide) % absorption * flux
+                     / micro_xs(p % event_nuclide) % sumxs(C_ABS) * flux
               end if
             end if
           else
@@ -608,7 +608,7 @@ contains
                   yield = nuclides(i_nuclide) % nu(E, EMISSION_DELAYED, d)
 
                   ! Compute the score and tally to bin
-                  score = micro_xs(i_nuclide) % fission * yield * &
+                  score = micro_xs(i_nuclide) % sumxs(C_FIS) * yield * &
                        atom_density * flux
                   call score_fission_delayed_dg(t, d_bin, score, score_index)
                 end do
@@ -618,7 +618,7 @@ contains
 
               ! If the delayed group filter is not present, compute the score
               ! by multiplying the delayed-nu-fission macro xs by the flux
-              score = micro_xs(i_nuclide) % fission * nuclides(i_nuclide) % &
+              score = micro_xs(i_nuclide) % sumxs(C_FIS) * nuclides(i_nuclide) % &
                    nu(E, EMISSION_DELAYED) * atom_density * flux
             end if
 
@@ -650,7 +650,7 @@ contains
                     yield = nuclides(i_nuc) % nu(E, EMISSION_DELAYED, d)
 
                     ! Compute the score and tally to bin
-                    score = micro_xs(i_nuc) % fission * yield * atom_density_ * flux
+                    score = micro_xs(i_nuc) % sumxs(C_FIS) * yield * atom_density_ * flux
                     call score_fission_delayed_dg(t, d_bin, score, score_index)
                   end do
                 end do
@@ -670,7 +670,7 @@ contains
                 i_nuc = materials(p % material) % nuclide(l)
 
                 ! Accumulate the contribution from each nuclide
-                score = score + micro_xs(i_nuc) % fission * nuclides(i_nuc) % &
+                score = score + micro_xs(i_nuc) % sumxs(C_FIS) * nuclides(i_nuc) % &
                      nu(E, EMISSION_DELAYED) * atom_density_ * flux
               end do
             end if
@@ -694,7 +694,7 @@ contains
             ! No fission events occur if survival biasing is on -- need to
             ! calculate fraction of absorptions that would have resulted in
             ! delayed-nu-fission
-            if (micro_xs(p % event_nuclide) % absorption > ZERO .and. &
+            if (micro_xs(p % event_nuclide) % sumxs(C_ABS) > ZERO .and. &
                  nuclides(p % event_nuclide) % fissionable) then
 
               ! Check if the delayed group filter is present
@@ -718,8 +718,8 @@ contains
 
                       ! Compute the score
                       score = p % absorb_wgt * yield * &
-                           micro_xs(p % event_nuclide) % fission &
-                           / micro_xs(p % event_nuclide) % absorption &
+                           micro_xs(p % event_nuclide) % sumxs(C_FIS) &
+                           / micro_xs(p % event_nuclide) % sumxs(C_ABS) &
                            * rxn % products(1 + d) % decay_rate * flux
                     end associate
 
@@ -746,9 +746,10 @@ contains
                   do d = 1, size(rxn % products) - 2
 
                     score = score + rxn % products(1 + d) % decay_rate * &
-                         p % absorb_wgt * micro_xs(p % event_nuclide) % fission *&
-                         nuclides(p % event_nuclide) % nu(E, EMISSION_DELAYED, d)&
-                         / micro_xs(p % event_nuclide) % absorption * flux
+                         p % absorb_wgt * micro_xs(p % event_nuclide) % &
+                         sumxs(C_FIS) * nuclides(p % event_nuclide) % &
+                         nu(E, EMISSION_DELAYED, d) / &
+                         micro_xs(p % event_nuclide) % sumxs(C_ABS) * flux
                   end do
                 end associate
               end if
@@ -837,7 +838,7 @@ contains
                        reactions(nuclides(i_nuclide) % index_fission(1)))
 
                     ! Compute the score and tally to bin
-                    score = micro_xs(i_nuclide) % fission * yield * flux * &
+                    score = micro_xs(i_nuclide) % sumxs(C_FIS) * yield * flux * &
                          atom_density * rxn % products(1 + d) % decay_rate
                   end associate
 
@@ -863,7 +864,7 @@ contains
                 ! and not the MAX_DELAYED_GROUPS constant for this loop.
                 do d = 1, size(rxn % products) - 2
 
-                  score = score + micro_xs(i_nuclide) % fission * flux * &
+                  score = score + micro_xs(i_nuclide) % sumxs(C_FIS) * flux * &
                        nuclides(i_nuclide) % nu(E, EMISSION_DELAYED) * &
                        atom_density * rxn % products(1 + d) % decay_rate
                 end do
@@ -903,7 +904,7 @@ contains
                            reactions(nuclides(i_nuc) % index_fission(1)))
 
                         ! Compute the score
-                        score = micro_xs(i_nuc) % fission * yield * flux * &
+                        score = micro_xs(i_nuc) % sumxs(C_FIS) * yield * flux * &
                              atom_density_ * rxn % products(1 + d) % decay_rate
                       end associate
 
@@ -939,8 +940,9 @@ contains
                     do d = 1, size(rxn % products) - 2
 
                       ! Accumulate the contribution from each nuclide
-                      score = score + micro_xs(i_nuc) % fission * nuclides(i_nuc) %&
-                           nu(E, EMISSION_DELAYED) * atom_density_ * flux * &
+                      score = score + micro_xs(i_nuc) % sumxs(C_FIS) * &
+                           nuclides(i_nuc) % nu(E, EMISSION_DELAYED) * &
+                           atom_density_ * flux * &
                            rxn % products(1 + d) % decay_rate
                     end do
                   end associate
@@ -963,12 +965,12 @@ contains
             ! calculate fraction of absorptions that would have resulted in
             ! fission scaled by kappa-fission
             associate (nuc => nuclides(p % event_nuclide))
-              if (micro_xs(p % event_nuclide) % absorption > ZERO .and. &
+              if (micro_xs(p % event_nuclide) % sumxs(C_ABS) > ZERO .and. &
                    nuc % fissionable) then
                 score = p % absorb_wgt * &
                      nuc % reactions(nuc % index_fission(1)) % Q_value * &
-                     micro_xs(p % event_nuclide) % fission / &
-                     micro_xs(p % event_nuclide) % absorption * flux
+                     micro_xs(p % event_nuclide) % sumxs(C_FIS) / &
+                     micro_xs(p % event_nuclide) % sumxs(C_ABS) * flux
               end if
             end associate
           else
@@ -981,8 +983,8 @@ contains
               if (nuc % fissionable) then
                 score = p % last_wgt * &
                      nuc % reactions(nuc % index_fission(1)) % Q_value * &
-                     micro_xs(p % event_nuclide) % fission / &
-                     micro_xs(p % event_nuclide) % absorption * flux
+                     micro_xs(p % event_nuclide) % sumxs(C_FIS) / &
+                     micro_xs(p % event_nuclide) % sumxs(C_ABS) * flux
               end if
             end associate
           end if
@@ -992,7 +994,7 @@ contains
             associate (nuc => nuclides(i_nuclide))
               if (nuc % fissionable) then
                 score = nuc % reactions(nuc % index_fission(1)) % Q_value * &
-                     micro_xs(i_nuclide) % fission * atom_density * flux
+                     micro_xs(i_nuclide) % sumxs(C_FIS) * atom_density * flux
               end if
             end associate
           else
@@ -1006,7 +1008,7 @@ contains
                 if (nuc % fissionable) then
                   score = score + &
                        nuc % reactions(nuc % index_fission(1)) % Q_value * &
-                       micro_xs(i_nuc) % fission * atom_density_ * flux
+                       micro_xs(i_nuc) % sumxs(C_FIS) * atom_density_ * flux
                 end if
               end associate
             end do
@@ -1025,9 +1027,9 @@ contains
 
         else
           if (i_nuclide > 0) then
-            score = micro_xs(i_nuclide) % elastic * atom_density * flux
+            score = micro_xs(i_nuclide) % sumxs(C_ELA) * atom_density * flux
           else
-            score = material_xs % elastic * flux
+            score = material_xs(C_ELA) * flux
           end if
         end if
 
@@ -1040,12 +1042,12 @@ contains
             ! calculate fraction of absorptions that would have resulted in
             ! fission scaled by Q-value
             associate (nuc => nuclides(p % event_nuclide))
-              if (micro_xs(p % event_nuclide) % absorption > ZERO .and. &
+              if (micro_xs(p % event_nuclide) % sumxs(C_ABS) > ZERO .and. &
                    allocated(nuc % fission_q_prompt)) then
                 score = p % absorb_wgt &
                      * nuc % fission_q_prompt % evaluate(p % last_E) &
-                     * micro_xs(p % event_nuclide) % fission &
-                     / micro_xs(p % event_nuclide) % absorption * flux
+                     * micro_xs(p % event_nuclide) % sumxs(C_FIS) &
+                     / micro_xs(p % event_nuclide) % sumxs(C_ABS) * flux
               end if
             end associate
           else
@@ -1058,8 +1060,8 @@ contains
               if (allocated(nuc % fission_q_prompt)) then
                 score = p % last_wgt &
                      * nuc % fission_q_prompt % evaluate(p % last_E) &
-                     * micro_xs(p % event_nuclide) % fission &
-                     / micro_xs(p % event_nuclide) % absorption * flux
+                     * micro_xs(p % event_nuclide) % sumxs(C_FIS) &
+                     / micro_xs(p % event_nuclide) % sumxs(C_ABS) * flux
               end if
             end associate
           end if
@@ -1073,7 +1075,7 @@ contains
 
           if (i_nuclide > 0) then
             if (allocated(nuclides(i_nuclide) % fission_q_prompt)) then
-              score = micro_xs(i_nuclide) % fission * atom_density * flux &
+              score = micro_xs(i_nuclide) % sumxs(C_FIS) * atom_density * flux &
                       * nuclides(i_nuclide) % fission_q_prompt % evaluate(E)
             end if
           else
@@ -1081,7 +1083,7 @@ contains
               atom_density_ = materials(p % material) % atom_density(l)
               i_nuc = materials(p % material) % nuclide(l)
               if (allocated(nuclides(i_nuc) % fission_q_prompt)) then
-                score = score + micro_xs(i_nuc) % fission * atom_density_ &
+                score = score + micro_xs(i_nuc) % sumxs(C_FIS) * atom_density_ &
                         * flux &
                         * nuclides(i_nuc) % fission_q_prompt % evaluate(E)
               end if
@@ -1098,12 +1100,12 @@ contains
             ! calculate fraction of absorptions that would have resulted in
             ! fission scaled by Q-value
             associate (nuc => nuclides(p % event_nuclide))
-              if (micro_xs(p % event_nuclide) % absorption > ZERO .and. &
+              if (micro_xs(p % event_nuclide) % sumxs(C_ABS) > ZERO .and. &
                    allocated(nuc % fission_q_recov)) then
                 score = p % absorb_wgt &
                      * nuc % fission_q_recov % evaluate(p % last_E) &
-                     * micro_xs(p % event_nuclide) % fission &
-                     / micro_xs(p % event_nuclide) % absorption * flux
+                     * micro_xs(p % event_nuclide) % sumxs(C_FIS) &
+                     / micro_xs(p % event_nuclide) % sumxs(C_ABS) * flux
               end if
             end associate
           else
@@ -1116,8 +1118,8 @@ contains
               if (allocated(nuc % fission_q_recov)) then
                 score = p % last_wgt &
                      * nuc % fission_q_recov % evaluate(p % last_E) &
-                     * micro_xs(p % event_nuclide) % fission &
-                     / micro_xs(p % event_nuclide) % absorption * flux
+                     * micro_xs(p % event_nuclide) % sumxs(C_FIS) &
+                     / micro_xs(p % event_nuclide) % sumxs(C_ABS) * flux
               end if
             end associate
           end if
@@ -1131,7 +1133,7 @@ contains
 
           if (i_nuclide > 0) then
             if (allocated(nuclides(i_nuclide) % fission_q_recov)) then
-              score = micro_xs(i_nuclide) % fission * atom_density * flux &
+              score = micro_xs(i_nuclide) % sumxs(C_FIS) * atom_density * flux &
                       * nuclides(i_nuclide) % fission_q_recov % evaluate(E)
             end if
           else
@@ -1139,7 +1141,7 @@ contains
               atom_density_ = materials(p % material) % atom_density(l)
               i_nuc = materials(p % material) % nuclide(l)
               if (allocated(nuclides(i_nuc) % fission_q_recov)) then
-                score = score + micro_xs(i_nuc) % fission * atom_density_ &
+                score = score + micro_xs(i_nuc) % sumxs(C_FIS) * atom_density_ &
                         * flux * nuclides(i_nuc) % fission_q_recov % evaluate(E)
               end if
             end do
@@ -1333,7 +1335,7 @@ contains
           else
             score = p % last_wgt
           end if
-          score = score / material_xs % total * flux
+          score = score / material_xs(C_TOT) * flux
 
         else
           ! For flux, we need no cross section
@@ -1365,7 +1367,7 @@ contains
             score = nucxs % get_xs('total', p_g, UVW=p_uvw) * &
                  atom_density * flux
           else
-            score = material_xs % total * flux
+            score = material_xs(C_TOT) * flux
           end if
         end if
 
@@ -1508,7 +1510,7 @@ contains
             score = nucxs % get_xs('absorption', p_g, UVW=p_uvw) * &
                  atom_density * flux
           else
-            score = material_xs % absorption * flux
+            score = material_xs(C_ABS) * flux
           end if
         end if
 
@@ -2832,9 +2834,9 @@ contains
     ! Determine collision estimate of flux
     if (survival_biasing) then
       ! We need to account for the fact that some weight was already absorbed
-      flux = (p % last_wgt + p % absorb_wgt) / material_xs % total
+      flux = (p % last_wgt + p % absorb_wgt) / material_xs(C_TOT)
     else
-      flux = p % last_wgt / material_xs % total
+      flux = p % last_wgt / material_xs(C_TOT)
     end if
 
     ! A loop over all tallies is necessary because we need to simultaneously
@@ -3366,12 +3368,12 @@ contains
           case (SCORE_TOTAL)
             if (i_nuclide == -1 .and. &
                  materials(p % material) % id == deriv % diff_material .and. &
-                 material_xs % total /= ZERO) then
+                 material_xs(C_TOT) /= ZERO) then
               score = score * (flux_deriv &
-                   + micro_xs(deriv % diff_nuclide) % total &
-                   / material_xs % total)
+                   + micro_xs(deriv % diff_nuclide) % sumxs(C_TOT) &
+                   / material_xs(C_TOT))
             else if (scoring_diff_nuclide .and. &
-                 micro_xs(deriv % diff_nuclide) % total /= ZERO) then
+                 micro_xs(deriv % diff_nuclide) % sumxs(C_TOT) /= ZERO) then
               score = score * (flux_deriv + ONE / atom_density)
             else
               score = score * flux_deriv
@@ -3380,14 +3382,14 @@ contains
           case (SCORE_SCATTER)
             if (i_nuclide == -1 .and. &
                  materials(p % material) % id == deriv % diff_material .and. &
-                 material_xs % total - material_xs % absorption /= ZERO) then
+                 material_xs(C_TOT) - material_xs(C_ABS) /= ZERO) then
               score = score * (flux_deriv &
-                   + (micro_xs(deriv % diff_nuclide) % total &
-                   - micro_xs(deriv % diff_nuclide) % absorption) &
-                   / (material_xs % total - material_xs % absorption))
+                   + (micro_xs(deriv % diff_nuclide) % sumxs(C_TOT) &
+                   - micro_xs(deriv % diff_nuclide) % sumxs(C_ABS)) &
+                   / (material_xs(C_TOT) - material_xs(C_ABS)))
             else if (scoring_diff_nuclide .and. &
-                 (micro_xs(deriv % diff_nuclide) % total &
-                 - micro_xs(deriv % diff_nuclide) % absorption) /= ZERO) then
+                 (micro_xs(deriv % diff_nuclide) % sumxs(C_TOT) &
+                 - micro_xs(deriv % diff_nuclide) % sumxs(C_ABS)) /= ZERO) then
               score = score * (flux_deriv + ONE / atom_density)
             else
               score = score * flux_deriv
@@ -3396,12 +3398,12 @@ contains
           case (SCORE_ABSORPTION)
             if (i_nuclide == -1 .and. &
                  materials(p % material) % id == deriv % diff_material .and. &
-                 material_xs % absorption /= ZERO) then
+                 material_xs(C_ABS) /= ZERO) then
               score = score * (flux_deriv &
-                   + micro_xs(deriv % diff_nuclide) % absorption &
-                   / material_xs % absorption )
+                   + micro_xs(deriv % diff_nuclide) % sumxs(C_ABS) &
+                   / material_xs(C_ABS) )
             else if (scoring_diff_nuclide .and. &
-                 micro_xs(deriv % diff_nuclide) % absorption /= ZERO) then
+                 micro_xs(deriv % diff_nuclide) % sumxs(C_ABS) /= ZERO) then
               score = score * (flux_deriv + ONE / atom_density)
             else
               score = score * flux_deriv
@@ -3410,12 +3412,12 @@ contains
           case (SCORE_FISSION)
             if (i_nuclide == -1 .and. &
                  materials(p % material) % id == deriv % diff_material .and. &
-                 material_xs % fission /= ZERO) then
+                 material_xs(C_FIS) /= ZERO) then
               score = score * (flux_deriv &
-                   + micro_xs(deriv % diff_nuclide) % fission &
-                   / material_xs % fission)
+                   + micro_xs(deriv % diff_nuclide) % sumxs(C_FIS) &
+                   / material_xs(C_FIS))
             else if (scoring_diff_nuclide .and. &
-                 micro_xs(deriv % diff_nuclide) % fission /= ZERO) then
+                 micro_xs(deriv % diff_nuclide) % sumxs(C_FIS) /= ZERO) then
               score = score * (flux_deriv + ONE / atom_density)
             else
               score = score * flux_deriv
@@ -3424,12 +3426,12 @@ contains
           case (SCORE_NU_FISSION)
             if (i_nuclide == -1 .and. &
                  materials(p % material) % id == deriv % diff_material .and. &
-                 material_xs % nu_fission /= ZERO) then
+                 material_xs(C_NUFIS) /= ZERO) then
               score = score * (flux_deriv &
-                   + micro_xs(deriv % diff_nuclide) % nu_fission &
-                   / material_xs % nu_fission)
+                   + micro_xs(deriv % diff_nuclide) % sumxs(C_NUFIS) &
+                   / material_xs(C_NUFIS))
             else if (scoring_diff_nuclide .and. &
-                 micro_xs(deriv % diff_nuclide) % nu_fission /= ZERO) then
+                 micro_xs(deriv % diff_nuclide) % sumxs(C_NUFIS) /= ZERO) then
               score = score * (flux_deriv + ONE / atom_density)
             else
               score = score * flux_deriv
@@ -3470,7 +3472,7 @@ contains
 
           case (SCORE_TOTAL)
             if (materials(p % material) % id == deriv % diff_material .and. &
-                 micro_xs(p % event_nuclide) % total > ZERO) then
+                 micro_xs(p % event_nuclide) % sumxs(C_TOT) > ZERO) then
               associate(mat => materials(p % material))
                 ! Search for the index of the perturbed nuclide.
                 do l = 1, mat % n_nuclides
@@ -3487,7 +3489,7 @@ contains
                   end if
                 end associate
                 score = score * (flux_deriv &
-                     + dsigT * mat % atom_density(l) / material_xs % total)
+                     + dsigT * mat % atom_density(l) / material_xs(C_TOT))
               end associate
             else
               score = score * flux_deriv
@@ -3495,8 +3497,8 @@ contains
 
           case (SCORE_SCATTER)
             if (materials(p % material) % id == deriv % diff_material .and. &
-                 (micro_xs(p % event_nuclide) % total &
-                 - micro_xs(p % event_nuclide) % absorption) > ZERO) then
+                 (micro_xs(p % event_nuclide) % sumxs(C_TOT) &
+                 - micro_xs(p % event_nuclide) % sumxs(C_ABS)) > ZERO) then
               associate(mat => materials(p % material))
                 ! Search for the index of the perturbed nuclide.
                 do l = 1, mat % n_nuclides
@@ -3515,7 +3517,7 @@ contains
                 end associate
                 score = score * (flux_deriv + (dsigT - dsigA) &
                      * mat % atom_density(l) / &
-                     (material_xs % total - material_xs % absorption))
+                     (material_xs(C_TOT) - material_xs(C_ABS)))
               end associate
             else
               score = score * flux_deriv
@@ -3523,7 +3525,7 @@ contains
 
           case (SCORE_ABSORPTION)
             if (materials(p % material) % id == deriv % diff_material .and. &
-                 micro_xs(p % event_nuclide) % absorption > ZERO) then
+                 micro_xs(p % event_nuclide) % sumxs(C_ABS) > ZERO) then
               associate(mat => materials(p % material))
                 ! Search for the index of the perturbed nuclide.
                 do l = 1, mat % n_nuclides
@@ -3540,7 +3542,7 @@ contains
                   end if
                 end associate
                 score = score * (flux_deriv &
-                     + dsigA * mat % atom_density(l) / material_xs % absorption)
+                     + dsigA * mat % atom_density(l) / material_xs(C_ABS))
               end associate
             else
               score = score * flux_deriv
@@ -3548,7 +3550,7 @@ contains
 
           case (SCORE_FISSION)
             if (materials(p % material) % id == deriv % diff_material .and. &
-                 micro_xs(p % event_nuclide) % fission > ZERO) then
+                 micro_xs(p % event_nuclide) % sumxs(C_FIS) > ZERO) then
               associate(mat => materials(p % material))
                 ! Search for the index of the perturbed nuclide.
                 do l = 1, mat % n_nuclides
@@ -3565,7 +3567,7 @@ contains
                   end if
                 end associate
                 score = score * (flux_deriv &
-                     + dsigF * mat % atom_density(l) / material_xs % fission)
+                     + dsigF * mat % atom_density(l) / material_xs(C_FIS))
               end associate
             else
               score = score * flux_deriv
@@ -3573,7 +3575,7 @@ contains
 
           case (SCORE_NU_FISSION)
             if (materials(p % material) % id == deriv % diff_material .and. &
-                 micro_xs(p % event_nuclide) % nu_fission > ZERO) then
+                 micro_xs(p % event_nuclide) % sumxs(C_NUFIS) > ZERO) then
               associate(mat => materials(p % material))
                 ! Search for the index of the perturbed nuclide.
                 do l = 1, mat % n_nuclides
@@ -3590,9 +3592,9 @@ contains
                   end if
                 end associate
                 score = score * (flux_deriv &
-                     + dsigF * mat % atom_density(l) / material_xs % nu_fission&
-                     * micro_xs(p % event_nuclide) % nu_fission &
-                     / micro_xs(p % event_nuclide) % fission)
+                     + dsigF * mat % atom_density(l) / material_xs(C_NUFIS)&
+                     * micro_xs(p % event_nuclide) % sumxs(C_NUFIS) &
+                     / micro_xs(p % event_nuclide) % sumxs(C_FIS))
               end associate
             else
               score = score * flux_deriv
@@ -3613,7 +3615,7 @@ contains
           case (SCORE_TOTAL)
             if (i_nuclide == -1 .and. &
                  materials(p % material) % id == deriv % diff_material .and. &
-                 material_xs % total > ZERO) then
+                 material_xs(C_TOT) > ZERO) then
               cum_dsig = ZERO
               associate(mat => materials(p % material))
                 do l = 1, mat % n_nuclides
@@ -3621,7 +3623,7 @@ contains
                     if (nuc % mp_present .and. &
                          p % last_E >= nuc % multipole % start_E .and. &
                          p % last_E <= nuc % multipole % end_E .and. &
-                         micro_xs(mat % nuclide(l)) % total > ZERO) then
+                         micro_xs(mat % nuclide(l)) % sumxs(C_TOT) > ZERO) then
                       call multipole_deriv_eval(nuc % multipole, p % last_E, &
                            p % sqrtkT, dsigT, dsigA, dsigF)
                       cum_dsig = cum_dsig + dsigT * mat % atom_density(l)
@@ -3630,9 +3632,9 @@ contains
                 end do
               end associate
               score = score * (flux_deriv &
-                   + cum_dsig / material_xs % total)
+                   + cum_dsig / material_xs(C_TOT))
             else if (materials(p % material) % id == deriv % diff_material &
-                 .and. material_xs % total > ZERO) then
+                 .and. material_xs(C_TOT) > ZERO) then
               dsigT = ZERO
               associate (nuc => nuclides(i_nuclide))
                 if (nuc % mp_present .and. &
@@ -3643,7 +3645,7 @@ contains
                 end if
               end associate
               score = score * (flux_deriv &
-                   + dsigT / micro_xs(i_nuclide) % total)
+                   + dsigT / micro_xs(i_nuclide) % sumxs(C_TOT))
             else
               score = score * flux_deriv
             end if
@@ -3651,7 +3653,7 @@ contains
           case (SCORE_SCATTER)
             if (i_nuclide == -1 .and. &
                  materials(p % material) % id == deriv % diff_material .and. &
-                 (material_xs % total - material_xs % absorption) > ZERO) then
+                 (material_xs(C_TOT) - material_xs(C_ABS)) > ZERO) then
               cum_dsig = ZERO
               associate(mat => materials(p % material))
                 do l = 1, mat % n_nuclides
@@ -3659,8 +3661,8 @@ contains
                     if (nuc % mp_present .and. &
                          p % last_E >= nuc % multipole % start_E .and. &
                          p % last_E <= nuc % multipole % end_E .and. &
-                         (micro_xs(mat % nuclide(l)) % total &
-                         - micro_xs(mat % nuclide(l)) % absorption) > ZERO) then
+                         (micro_xs(mat % nuclide(l)) % sumxs(C_TOT) &
+                         - micro_xs(mat % nuclide(l)) % sumxs(C_ABS)) > ZERO) then
                       call multipole_deriv_eval(nuc % multipole, p % last_E, &
                            p % sqrtkT, dsigT, dsigA, dsigF)
                       cum_dsig = cum_dsig &
@@ -3670,9 +3672,9 @@ contains
                 end do
               end associate
               score = score * (flux_deriv + cum_dsig &
-                   / (material_xs % total - material_xs % absorption))
+                   / (material_xs(C_TOT) - material_xs(C_ABS)))
             else if ( materials(p % material) % id == deriv % diff_material &
-                 .and. (material_xs % total - material_xs % absorption) > ZERO)&
+                 .and. (material_xs(C_TOT) - material_xs(C_ABS)) > ZERO)&
                  then
               dsigT = ZERO
               dsigA = ZERO
@@ -3685,8 +3687,8 @@ contains
                 end if
               end associate
               score = score * (flux_deriv + (dsigT - dsigA) &
-                   / (micro_xs(i_nuclide) % total &
-                   - micro_xs(i_nuclide) % absorption))
+                   / (micro_xs(i_nuclide) % sumxs(C_TOT) &
+                   - micro_xs(i_nuclide) % sumxs(C_ABS)))
             else
               score = score * flux_deriv
             end if
@@ -3694,7 +3696,7 @@ contains
           case (SCORE_ABSORPTION)
             if (i_nuclide == -1 .and. &
                  materials(p % material) % id == deriv % diff_material .and. &
-                 material_xs % absorption > ZERO) then
+                 material_xs(C_ABS) > ZERO) then
               cum_dsig = ZERO
               associate(mat => materials(p % material))
                 do l = 1, mat % n_nuclides
@@ -3702,7 +3704,7 @@ contains
                     if (nuc % mp_present .and. &
                          p % last_E >= nuc % multipole % start_E .and. &
                          p % last_E <= nuc % multipole % end_E .and. &
-                         micro_xs(mat % nuclide(l)) % absorption > ZERO) then
+                         micro_xs(mat % nuclide(l)) % sumxs(C_ABS) > ZERO) then
                       call multipole_deriv_eval(nuc % multipole, p % last_E, &
                            p % sqrtkT, dsigT, dsigA, dsigF)
                       cum_dsig = cum_dsig + dsigA * mat % atom_density(l)
@@ -3711,9 +3713,9 @@ contains
                 end do
               end associate
               score = score * (flux_deriv &
-                   + cum_dsig / material_xs % absorption)
+                   + cum_dsig / material_xs(C_ABS))
             else if (materials(p % material) % id == deriv % diff_material &
-                 .and. material_xs % absorption > ZERO) then
+                 .and. material_xs(C_ABS) > ZERO) then
               dsigA = ZERO
               associate (nuc => nuclides(i_nuclide))
                 if (nuc % mp_present .and. &
@@ -3724,7 +3726,7 @@ contains
                 end if
               end associate
               score = score * (flux_deriv &
-                   + dsigA / micro_xs(i_nuclide) % absorption)
+                   + dsigA / micro_xs(i_nuclide) % sumxs(C_ABS))
             else
               score = score * flux_deriv
             end if
@@ -3732,7 +3734,7 @@ contains
           case (SCORE_FISSION)
             if (i_nuclide == -1 .and. &
                  materials(p % material) % id == deriv % diff_material .and. &
-                 material_xs % fission > ZERO) then
+                 material_xs(C_FIS) > ZERO) then
               cum_dsig = ZERO
               associate(mat => materials(p % material))
                 do l = 1, mat % n_nuclides
@@ -3740,7 +3742,7 @@ contains
                     if (nuc % mp_present .and. &
                          p % last_E >= nuc % multipole % start_E .and. &
                          p % last_E <= nuc % multipole % end_E .and. &
-                         micro_xs(mat % nuclide(l)) % fission > ZERO) then
+                         micro_xs(mat % nuclide(l)) % sumxs(C_FIS) > ZERO) then
                       call multipole_deriv_eval(nuc % multipole, p % last_E, &
                            p % sqrtkT, dsigT, dsigA, dsigF)
                       cum_dsig = cum_dsig + dsigF * mat % atom_density(l)
@@ -3749,9 +3751,9 @@ contains
                 end do
               end associate
               score = score * (flux_deriv &
-                   + cum_dsig / material_xs % fission)
+                   + cum_dsig / material_xs(C_FIS))
             else if (materials(p % material) % id == deriv % diff_material &
-                 .and. material_xs % fission > ZERO) then
+                 .and. material_xs(C_FIS) > ZERO) then
               dsigF = ZERO
               associate (nuc => nuclides(i_nuclide))
                 if (nuc % mp_present .and. &
@@ -3762,7 +3764,7 @@ contains
                 end if
               end associate
               score = score * (flux_deriv &
-                   + dsigF / micro_xs(i_nuclide) % fission)
+                   + dsigF / micro_xs(i_nuclide) % sumxs(C_FIS))
             else
               score = score * flux_deriv
             end if
@@ -3770,7 +3772,7 @@ contains
           case (SCORE_NU_FISSION)
             if (i_nuclide == -1 .and. &
                  materials(p % material) % id == deriv % diff_material .and. &
-                 material_xs % nu_fission > ZERO) then
+                 material_xs(C_NUFIS) > ZERO) then
               cum_dsig = ZERO
               associate(mat => materials(p % material))
                 do l = 1, mat % n_nuclides
@@ -3778,20 +3780,20 @@ contains
                     if (nuc % mp_present .and. &
                          p % last_E >= nuc % multipole % start_E .and. &
                          p % last_E <= nuc % multipole % end_E .and. &
-                         micro_xs(mat % nuclide(l)) % nu_fission > ZERO) then
+                         micro_xs(mat % nuclide(l)) % sumxs(C_NUFIS) > ZERO) then
                       call multipole_deriv_eval(nuc % multipole, p % last_E, &
                            p % sqrtkT, dsigT, dsigA, dsigF)
                       cum_dsig = cum_dsig + dsigF * mat % atom_density(l) &
-                           * micro_xs(mat % nuclide(l)) % nu_fission &
-                           / micro_xs(mat % nuclide(l)) % fission
+                           * micro_xs(mat % nuclide(l)) % sumxs(C_NUFIS) &
+                           / micro_xs(mat % nuclide(l)) % sumxs(C_FIS)
                     end if
                   end associate
                 end do
               end associate
               score = score * (flux_deriv &
-                   + cum_dsig / material_xs % nu_fission)
+                   + cum_dsig / material_xs(C_NUFIS))
             else if (materials(p % material) % id == deriv % diff_material &
-                 .and. material_xs % nu_fission > ZERO) then
+                 .and. material_xs(C_NUFIS) > ZERO) then
               dsigF = ZERO
               associate (nuc => nuclides(i_nuclide))
                 if (nuc % mp_present .and. &
@@ -3802,7 +3804,7 @@ contains
                 end if
               end associate
               score = score * (flux_deriv &
-                   + dsigF / micro_xs(i_nuclide) % fission)
+                   + dsigF / micro_xs(i_nuclide) % sumxs(C_FIS))
             else
               score = score * flux_deriv
             end if
@@ -3846,7 +3848,7 @@ contains
               ! (1 / phi) * (d_phi / d_rho) = - (d_Sigma_tot / d_rho) * dist
               ! (1 / phi) * (d_phi / d_rho) = - Sigma_tot / rho * dist
               deriv % flux_deriv = deriv % flux_deriv &
-                   - distance * material_xs % total / mat % density_gpcc
+                   - distance * material_xs(C_TOT) / mat % density_gpcc
             end if
           end associate
 
@@ -3857,7 +3859,7 @@ contains
               ! (1 / phi) * (d_phi / d_N) = - (d_Sigma_tot / d_N) * dist
               ! (1 / phi) * (d_phi / d_N) = - sigma_tot * dist
               deriv % flux_deriv = deriv % flux_deriv &
-                   - distance * micro_xs(deriv % diff_nuclide) % total
+                   - distance * micro_xs(deriv % diff_nuclide) % sumxs(C_TOT)
             end if
           end associate
 
@@ -3962,8 +3964,8 @@ contains
                     call multipole_deriv_eval(nuc % multipole, p % last_E, &
                          p % sqrtkT, dsigT, dsigA, dsigF)
                     deriv % flux_deriv = deriv % flux_deriv + (dsigT - dsigA)&
-                         / (micro_xs(mat % nuclide(l)) % total &
-                         - micro_xs(mat % nuclide(l)) % absorption)
+                         / (micro_xs(mat % nuclide(l)) % sumxs(C_TOT) &
+                         - micro_xs(mat % nuclide(l)) % sumxs(C_ABS))
                     ! Note that this is an approximation!  The real scattering
                     ! cross section is Sigma_s(E'->E, uvw'->uvw) =
                     ! Sigma_s(E') * P(E'->E, uvw'->uvw).  We are assuming that

@@ -216,6 +216,14 @@ module constants
        N_D0    = 650, N_DC    = 699, N_T0   = 700, N_TC    = 749, N_3HE0  = 750, &
        N_3HEC  = 799, N_A0    = 800, N_AC   = 849, N_2N0   = 875, N_2NC   = 891
 
+  ! Summed reaction types
+  integer, parameter :: &
+       C_TOT   = 1, & ! total cross section
+       C_ELA   = 2, & ! elastic scattering
+       C_ABS   = 3, & ! absorption (MT > 100)
+       C_FIS   = 4, & ! fission
+       C_NUFIS = 5  ! neutron production
+
   ! ACE table types
   integer, parameter :: &
        ACE_NEUTRON   = 1, & ! continuous-energy neutron

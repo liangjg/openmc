@@ -11,7 +11,6 @@ module mgxs_header
   use hdf5_interface
   use material_header, only: material
   use math,            only: evaluate_legendre
-  use nuclide_header,  only: MaterialMacroXS
   use random_lcg,      only: prn
   use scattdata_header
   use string
@@ -164,11 +163,11 @@ module mgxs_header
     end subroutine mgxs_sample_scatter_
 
     subroutine mgxs_calculate_xs_(this, gin, uvw, xs)
-      import Mgxs, MaterialMacroXS
+      import Mgxs
       class(Mgxs),           intent(in)    :: this
       integer,               intent(in)    :: gin    ! Incoming neutron group
       real(8),               intent(in)    :: uvw(3) ! Incoming neutron direction
-      type(MaterialMacroXS), intent(inout) :: xs     ! Resultant Mgxs Data
+      real(8), dimension(5), intent(inout) :: xs     ! Resultant Mgxs Data
     end subroutine mgxs_calculate_xs_
   end interface
 
@@ -3464,11 +3463,11 @@ module mgxs_header
       class(MgxsIso),        intent(in)    :: this
       integer,               intent(in)    :: gin    ! Incoming neutron group
       real(8),               intent(in)    :: uvw(3) ! Incoming neutron direction
-      type(MaterialMacroXS), intent(inout) :: xs     ! Resultant Mgxs Data
+      real(8), dimension(5), intent(inout) :: xs     ! Resultant Mgxs Data
 
-      xs % total         = this % xs(this % index_temp) % total(gin)
-      xs % absorption    = this % xs(this % index_temp) % absorption(gin)
-      xs % nu_fission    = &
+      xs(C_TOT)      = this % xs(this % index_temp) % total(gin)
+      xs(C_ABS) = this % xs(this % index_temp) % absorption(gin)
+      xs(C_NUFIS) = &
            this % xs(this % index_temp) % prompt_nu_fission(gin) + &
            sum(this % xs(this % index_temp) % delayed_nu_fission(:, gin))
 
@@ -3478,16 +3477,16 @@ module mgxs_header
       class(MgxsAngle),      intent(in)    :: this
       integer,               intent(in)    :: gin    ! Incoming neutron group
       real(8),               intent(in)    :: uvw(3) ! Incoming neutron direction
-      type(MaterialMacroXS), intent(inout) :: xs     ! Resultant Mgxs Data
+      real(8), dimension(5), intent(inout) :: xs     ! Resultant Mgxs Data
 
       integer :: iazi, ipol
 
       call find_angle(this % polar, this % azimuthal, uvw, iazi, ipol)
-      xs % total         = this % xs(this % index_temp) % &
+      xs(C_TOT)      = this % xs(this % index_temp) % &
            total(gin, iazi, ipol)
-      xs % absorption    = this % xs(this % index_temp) % &
+      xs(C_ABS) = this % xs(this % index_temp) % &
            absorption(gin, iazi, ipol)
-      xs % nu_fission    = this % xs(this % index_temp) % &
+      xs(C_NUFIS) = this % xs(this % index_temp) % &
            prompt_nu_fission(gin, iazi, ipol) + &
            sum(this % xs(this % index_temp) % &
            delayed_nu_fission(:, gin, iazi, ipol))

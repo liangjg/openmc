@@ -110,7 +110,7 @@ contains
     ! If survival biasing is being used, the following subroutine adjusts the
     ! weight of the particle. Otherwise, it checks to see if absorption occurs
 
-    if (micro_xs(i_nuclide) % absorption > ZERO) then
+    if (micro_xs(i_nuclide) % sumxs(C_ABS) > ZERO) then
       call absorption(p, i_nuclide)
     else
       p % absorb_wgt = ZERO
@@ -160,11 +160,11 @@ contains
     ! Sample cumulative distribution function
     select case (base)
     case ('total')
-      cutoff = prn() * material_xs % total
+      cutoff = prn() * material_xs(C_TOT)
     case ('scatter')
-      cutoff = prn() * (material_xs % total - material_xs % absorption)
+      cutoff = prn() * (material_xs(C_TOT) - material_xs(C_ABS))
     case ('fission')
-      cutoff = prn() * material_xs % fission
+      cutoff = prn() * material_xs(C_FIS)
     end select
 
     i_nuc_mat = 0
@@ -185,12 +185,12 @@ contains
       ! Determine microscopic cross section
       select case (base)
       case ('total')
-        sigma = atom_density * micro_xs(i_nuclide) % total
+        sigma = atom_density * micro_xs(i_nuclide) % sumxs(C_TOT)
       case ('scatter')
-        sigma = atom_density * (micro_xs(i_nuclide) % total - &
-             micro_xs(i_nuclide) % absorption)
+        sigma = atom_density * (micro_xs(i_nuclide) % sumxs(C_TOT) - &
+             micro_xs(i_nuclide) % sumxs(C_ABS))
       case ('fission')
-        sigma = atom_density * micro_xs(i_nuclide) % fission
+        sigma = atom_density * micro_xs(i_nuclide) % sumxs(C_FIS)
       end select
 
       ! Increment probability to compare to cutoff
@@ -242,7 +242,7 @@ contains
     i_temp = micro_xs(i_nuclide) % index_temp
     i_grid = micro_xs(i_nuclide) % index_grid
     f      = micro_xs(i_nuclide) % interp_factor
-    cutoff = prn() * micro_xs(i_nuclide) % fission
+    cutoff = prn() * micro_xs(i_nuclide) % sumxs(C_FIS)
     prob   = ZERO
 
     ! Loop through each partial fission reaction type
@@ -275,8 +275,8 @@ contains
 
     if (survival_biasing) then
       ! Determine weight absorbed in survival biasing
-      p % absorb_wgt = p % wgt * micro_xs(i_nuclide) % absorption / &
-           micro_xs(i_nuclide) % total
+      p % absorb_wgt = p % wgt * micro_xs(i_nuclide) % sumxs(C_ABS) / &
+           micro_xs(i_nuclide) % sumxs(C_TOT)
 
       ! Adjust weight of particle by probability of absorption
       p % wgt = p % wgt - p % absorb_wgt
@@ -285,16 +285,18 @@ contains
       ! Score implicit absorption estimate of keff
       if (run_mode == MODE_EIGENVALUE) then
         global_tally_absorption = global_tally_absorption + p % absorb_wgt * &
-             micro_xs(i_nuclide) % nu_fission / micro_xs(i_nuclide) % absorption
+             micro_xs(i_nuclide) % sumxs(C_NUFIS) / &
+             micro_xs(i_nuclide) % sumxs(C_ABS)
       end if
     else
       ! See if disappearance reaction happens
-      if (micro_xs(i_nuclide) % absorption > &
-           prn() * micro_xs(i_nuclide) % total) then
+      if (micro_xs(i_nuclide) % sumxs(C_ABS) > &
+           prn() * micro_xs(i_nuclide) % sumxs(C_TOT)) then
         ! Score absorption estimate of keff
         if (run_mode == MODE_EIGENVALUE) then
           global_tally_absorption = global_tally_absorption + p % wgt * &
-               micro_xs(i_nuclide) % nu_fission / micro_xs(i_nuclide) % absorption
+               micro_xs(i_nuclide) % sumxs(C_NUFIS) / &
+               micro_xs(i_nuclide) % sumxs(C_ABS)
         end if
 
         p % alive = .false.
@@ -338,10 +340,10 @@ contains
     ! For tallying purposes, this routine might be called directly. In that
     ! case, we need to sample a reaction via the cutoff variable
     prob = ZERO
-    cutoff = prn() * (micro_xs(i_nuclide) % total - &
-         micro_xs(i_nuclide) % absorption)
+    cutoff = prn() * (micro_xs(i_nuclide) % sumxs(C_TOT) - &
+         micro_xs(i_nuclide) % sumxs(C_ABS))
 
-    prob = prob + micro_xs(i_nuclide) % elastic
+    prob = prob + micro_xs(i_nuclide) % sumxs(C_ELA)
     if (prob > cutoff) then
       ! =======================================================================
       ! ELASTIC SCATTERING
@@ -464,7 +466,7 @@ contains
     ! Sample velocity of target nucleus
     if (.not. micro_xs(i_nuclide) % use_ptable) then
       call sample_target_velocity(nuc, v_t, E, uvw, v_n, wgt, &
-           micro_xs(i_nuclide) % elastic, kT)
+           micro_xs(i_nuclide) % sumxs(C_ELA), kT)
     else
       v_t = ZERO
     end if
@@ -556,7 +558,7 @@ contains
 
       ! Determine whether inelastic or elastic scattering will occur
       if (prn() < micro_xs(i_nuclide) % elastic_sab / &
-           micro_xs(i_nuclide) % elastic) then
+           micro_xs(i_nuclide) % sumxs(C_ELA)) then
         ! elastic scattering
 
         ! Get index and interpolation factor for elastic grid
@@ -1150,8 +1152,8 @@ contains
     end if
 
     ! Determine expected number of neutrons produced
-    nu_t = p % wgt / keff * weight * micro_xs(i_nuclide) % nu_fission / &
-         micro_xs(i_nuclide) % total
+    nu_t = p % wgt / keff * weight * micro_xs(i_nuclide) % sumxs(C_NUFIS) / &
+         micro_xs(i_nuclide) % sumxs(C_TOT)
 
     ! Sample number of neutrons produced
     if (prn() > nu_t - int(nu_t)) then

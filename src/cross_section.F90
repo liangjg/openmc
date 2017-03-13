@@ -39,11 +39,7 @@ contains
     logical :: check_sab     ! should we check for S(a,b) table?
 
     ! Set all material macroscopic cross sections to zero
-    material_xs % total          = ZERO
-    material_xs % elastic        = ZERO
-    material_xs % absorption     = ZERO
-    material_xs % fission        = ZERO
-    material_xs % nu_fission     = ZERO
+    material_xs = ZERO
 
     ! Exit subroutine if material is void
     if (p % material == MATERIAL_VOID) return
@@ -104,25 +100,8 @@ contains
         ! Copy atom density of nuclide in material
         atom_density = mat % atom_density(i)
 
-        ! Add contributions to material macroscopic total cross section
-        material_xs % total = material_xs % total + &
-             atom_density * micro_xs(i_nuclide) % total
-
-        ! Add contributions to material macroscopic scattering cross section
-        material_xs % elastic = material_xs % elastic + &
-             atom_density * micro_xs(i_nuclide) % elastic
-
-        ! Add contributions to material macroscopic absorption cross section
-        material_xs % absorption = material_xs % absorption + &
-             atom_density * micro_xs(i_nuclide) % absorption
-
-        ! Add contributions to material macroscopic fission cross section
-        material_xs % fission = material_xs % fission + &
-             atom_density * micro_xs(i_nuclide) % fission
-
-        ! Add contributions to material macroscopic nu-fission cross section
-        material_xs % nu_fission = material_xs % nu_fission + &
-             atom_density * micro_xs(i_nuclide) % nu_fission
+        ! Add contributions to material macroscopic cross section
+        material_xs = material_xs + atom_density * micro_xs(i_nuclide) % sumxs
       end do
     end associate
 
@@ -148,7 +127,7 @@ contains
     real(8) :: f      ! interp factor on nuclide energy grid
     real(8) :: kT     ! temperature in eV
     real(8) :: sigT, sigA, sigF ! Intermediate multipole variables
-    real(8), dimension(5) :: sumxs
+
     associate (nuc => nuclides(i_nuclide))
       ! Check to see if there is multipole data present at this energy
       use_mp = .false.
@@ -164,16 +143,16 @@ contains
         ! Call multipole kernel
         call multipole_eval(nuc % multipole, E, sqrtkT, sigT, sigA, sigF)
 
-        micro_xs(i_nuclide) % total = sigT
-        micro_xs(i_nuclide) % absorption = sigA
-        micro_xs(i_nuclide) % elastic = sigT - sigA
+        micro_xs(i_nuclide) % sumxs(C_TOT) = sigT
+        micro_xs(i_nuclide) % sumxs(C_ABS) = sigA
+        micro_xs(i_nuclide) % sumxs(C_ELA) = sigT - sigA
 
         if (nuc % fissionable) then
-          micro_xs(i_nuclide) % fission = sigF
-          micro_xs(i_nuclide) % nu_fission = sigF * nuc % nu(E, EMISSION_TOTAL)
+          micro_xs(i_nuclide) % sumxs(C_FIS)    = sigF
+          micro_xs(i_nuclide) % sumxs(C_NUFIS) = sigF * nuc % nu(E, EMISSION_TOTAL)
         else
-          micro_xs(i_nuclide) % fission    = ZERO
-          micro_xs(i_nuclide) % nu_fission = ZERO
+          micro_xs(i_nuclide) % sumxs(C_FIS)    = ZERO
+          micro_xs(i_nuclide) % sumxs(C_NUFIS) = ZERO
         end if
 
         ! Ensure these values are set
@@ -239,20 +218,9 @@ contains
           micro_xs(i_nuclide) % index_grid    = i_grid
           micro_xs(i_nuclide) % interp_factor = f
 
-          sumxs =  (ONE - f) * xs % xs(1:5, i_grid) &
-               + f * xs % xs(1:5, i_grid + 1)
-          ! Calculate microscopic nuclide total cross section
-          micro_xs(i_nuclide) % total = sumxs(1)
-
-          ! Calculate microscopic nuclide elastic cross section
-          micro_xs(i_nuclide) % elastic = sumxs(2)
-
-          ! Calculate microscopic nuclide absorption cross section
-          micro_xs(i_nuclide) % absorption = sumxs(3)
-
-          ! Initialize nuclide cross-sections to zero
-          micro_xs(i_nuclide) % fission    = sumxs(4)
-          micro_xs(i_nuclide) % nu_fission = sumxs(5)
+          ! Calculate microscopic nuclide cross sections
+          micro_xs(i_nuclide) % sumxs = &
+               (ONE - f) * xs % xs(1:5, i_grid) + f * xs % xs(1:5, i_grid + 1)
 
         end associate
       end if
@@ -390,9 +358,9 @@ contains
     end associate
 
     ! Correct total and elastic cross sections
-    micro_xs(i_nuclide) % total = micro_xs(i_nuclide) % total - &
-         micro_xs(i_nuclide) % elastic + inelastic + elastic
-    micro_xs(i_nuclide) % elastic = inelastic + elastic
+    micro_xs(i_nuclide) % sumxs(C_TOT) = micro_xs(i_nuclide) % sumxs(C_TOT) - &
+         micro_xs(i_nuclide) % sumxs(C_ELA) + inelastic + elastic
+    micro_xs(i_nuclide) % sumxs(C_ELA) = inelastic + elastic
 
     ! Store S(a,b) elastic cross section for sampling later
     micro_xs(i_nuclide) % elastic_sab = elastic
@@ -517,10 +485,10 @@ contains
 
       ! Multiply by smooth cross-section if needed
       if (urr % multiply_smooth) then
-        elastic = elastic * micro_xs(i_nuclide) % elastic
-        capture = capture * (micro_xs(i_nuclide) % absorption - &
-             micro_xs(i_nuclide) % fission)
-        fission = fission * micro_xs(i_nuclide) % fission
+        elastic = elastic * micro_xs(i_nuclide) % sumxs(C_ELA)
+        capture = capture * (micro_xs(i_nuclide) % sumxs(C_ABS) - &
+             micro_xs(i_nuclide) % sumxs(C_FIS))
+        fission = fission * micro_xs(i_nuclide) % sumxs(C_FIS)
       end if
 
       ! Check for negative values
@@ -531,15 +499,15 @@ contains
       ! Set elastic, absorption, fission, and total cross sections. Note that the
       ! total cross section is calculated as sum of partials rather than using the
       ! table-provided value
-      micro_xs(i_nuclide) % elastic = elastic
-      micro_xs(i_nuclide) % absorption = capture + fission
-      micro_xs(i_nuclide) % fission = fission
-      micro_xs(i_nuclide) % total = elastic + inelastic + capture + fission
+      micro_xs(i_nuclide) % sumxs(C_ELA) = elastic
+      micro_xs(i_nuclide) % sumxs(C_ABS) = capture + fission
+      micro_xs(i_nuclide) % sumxs(C_FIS) = fission
+      micro_xs(i_nuclide) % sumxs(C_TOT) = elastic + inelastic + capture + fission
 
       ! Determine nu-fission cross section
       if (nuc % fissionable) then
-        micro_xs(i_nuclide) % nu_fission = nuc % nu(E, EMISSION_TOTAL) * &
-             micro_xs(i_nuclide) % fission
+        micro_xs(i_nuclide) % sumxs(C_NUFIS) = nuc % nu(E, EMISSION_TOTAL) *&
+             micro_xs(i_nuclide) % sumxs(C_FIS)
       end if
     end associate
 

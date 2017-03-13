@@ -36,17 +36,10 @@ module nuclide_header
     real(8), allocatable :: energy(:)     ! energy values corresponding to xs
   end type EnergyGrid
 
-  type SummedReactions
-    real(8) :: total      = ZERO ! total cross section
-    real(8) :: elastic    = ZERO ! elastic scattering
-    real(8) :: absorption = ZERO ! absorption (MT > 100)
-    real(8) :: fission    = ZERO ! fission
-    real(8) :: nu_fission = ZERO ! neutron production
-    real(8) :: heating    = ZERO ! heating
-  end type SummedReactions
-
   type SumXS
-    real(8), allocatable :: xs(:, :)
+    real(8), allocatable :: xs(:, :) ! adjacent summed cross sections along the
+                                     ! energy grid, in the order total, elastic,
+                                     ! absorption, fission, nu_fission
   end type SumXS
 
   type :: Nuclide
@@ -131,11 +124,10 @@ module nuclide_header
     integer :: index_temp      ! temperature index for nuclide
     integer :: index_grid      ! index on nuclide energy grid
     real(8) :: interp_factor   ! interpolation factor on nuc. energy grid
-    real(8) :: total           ! microscropic total xs
-    real(8) :: elastic         ! microscopic elastic scattering xs
-    real(8) :: absorption      ! microscopic absorption xs
-    real(8) :: fission         ! microscopic fission xs
-    real(8) :: nu_fission      ! microscopic production xs
+
+    ! Summed reactions xs array
+    ! 1-total, 2-elastic, 3-absorption, 4-fission, 5-nu_fission
+    real(8), dimension(5) :: sumxs
 
     ! Information for S(a,b) use
     integer :: index_sab          ! index in sab_tables (zero means no table)
@@ -151,19 +143,6 @@ module nuclide_header
     real(8) :: last_sqrtkT = ZERO  ! last temperature in sqrt(Boltzmann
                                    ! constant * temperature (eV))
   end type NuclideMicroXS
-
-!===============================================================================
-! MATERIALMACROXS contains cached macroscopic cross sections for the material a
-! particle is traveling through
-!===============================================================================
-
-  type MaterialMacroXS
-    real(8) :: total         ! macroscopic total xs
-    real(8) :: elastic       ! macroscopic elastic scattering xs
-    real(8) :: absorption    ! macroscopic absorption xs
-    real(8) :: fission       ! macroscopic fission xs
-    real(8) :: nu_fission    ! macroscopic production xs
-  end type MaterialMacroXS
 
 !===============================================================================
 ! LIBRARY contains data read from a cross_sections.xml file
@@ -500,16 +479,16 @@ module nuclide_header
 
           ! Copy elastic
           if (rx % MT == ELASTIC) &
-               this % sum_xs(t) % xs(2, :) = rx % xs(t) % value
+               this % sum_xs(t) % xs(C_ELA, :) = rx % xs(t) % value
 
           ! Add contribution to total cross section
-          this % sum_xs(t) % xs(1, j:j+n-1) = &
-               this % sum_xs(t) % xs(1, j:j+n-1) + rx % xs(t) % value
+          this % sum_xs(t) % xs(C_TOT, j:j+n-1) = &
+               this % sum_xs(t) % xs(C_TOT, j:j+n-1) + rx % xs(t) % value
 
           ! Add contribution to absorption cross section
           if (is_disappearance(rx % MT)) then
-            this % sum_xs(t) % xs(3, j:j+n-1) = &
-                 this % sum_xs(t) % xs(3, j:j+n-1) + rx % xs(t) % value
+            this % sum_xs(t) % xs(C_ABS, j:j+n-1) = &
+                 this % sum_xs(t) % xs(C_ABS, j:j+n-1) + rx % xs(t) % value
           end if
 
           ! Information about fission reactions
@@ -525,12 +504,12 @@ module nuclide_header
           ! Add contribution to fission cross section
           if (is_fission(rx % MT)) then
             this % fissionable = .true.
-            this % sum_xs(t) % xs(4, j:j+n-1) = this % sum_xs(t) % &
-                 xs(4, j:j+n-1) + rx % xs(t) % value
+            this % sum_xs(t) % xs(C_FIS, j:j+n-1) = this % sum_xs(t) % &
+                 xs(C_FIS, j:j+n-1) + rx % xs(t) % value
 
             ! Also need to add fission cross sections to absorption
-            this % sum_xs(t) % xs(3, j:j+n-1) = this % sum_xs(t) % &
-                 xs(3, j:j+n-1) + rx % xs(t) % value
+            this % sum_xs(t) % xs(C_ABS, j:j+n-1) = this % sum_xs(t) % &
+                 xs(C_ABS, j:j+n-1) + rx % xs(t) % value
 
             ! If total fission reaction is present, there's no need to store the
             ! reaction cross-section since it was copied to this % fission
@@ -581,9 +560,9 @@ module nuclide_header
     ! Calculate nu-fission cross section
     do t = 1, n_temperature
       if (this % fissionable) then
-        do i = 1, size(this % sum_xs(t) % xs(5,:))
-          this % sum_xs(t) % xs(5, i) = this % nu(this % grid(t) % energy(i), &
-               EMISSION_TOTAL) * this % sum_xs(t) % xs(4, i)
+        do i = 1, size(this % sum_xs(t) % xs(C_NUFIS,:))
+          this % sum_xs(t) % xs(C_NUFIS, i) = this % nu(this % grid(t) % &
+               energy(i),EMISSION_TOTAL) * this % sum_xs(t) % xs(C_FIS, i)
         end do
       end if
     end do

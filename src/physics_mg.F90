@@ -82,7 +82,7 @@ contains
     ! If survival biasing is being used, the following subroutine adjusts the
     ! weight of the particle. Otherwise, it checks to see if absorption occurs
 
-    if (material_xs % absorption > ZERO) then
+    if (material_xs(C_ABS) > ZERO) then
       call absorption(p)
     else
       p % absorb_wgt = ZERO
@@ -111,8 +111,7 @@ contains
 
     if (survival_biasing) then
       ! Determine weight absorbed in survival biasing
-      p % absorb_wgt = (p % wgt * &
-                        material_xs % absorption / material_xs % total)
+      p % absorb_wgt = p % wgt * material_xs(C_ABS) / material_xs(C_TOT)
 
       ! Adjust weight of particle by probability of absorption
       p % wgt = p % wgt - p % absorb_wgt
@@ -122,15 +121,15 @@ contains
 !$omp atomic
       global_tallies(RESULT_VALUE, K_ABSORPTION) = &
            global_tallies(RESULT_VALUE, K_ABSORPTION) + p % absorb_wgt * &
-           material_xs % nu_fission / material_xs % absorption
+           material_xs(C_NUFIS) / material_xs(C_ABS)
     else
       ! See if disappearance reaction happens
-      if (material_xs % absorption > prn() * material_xs % total) then
+      if (material_xs(C_ABS) > prn() * material_xs(C_TOT)) then
         ! Score absorption estimate of keff
 !$omp atomic
         global_tallies(RESULT_VALUE, K_ABSORPTION) = &
              global_tallies(RESULT_VALUE, K_ABSORPTION) + p % wgt * &
-             material_xs % nu_fission / material_xs % absorption
+             material_xs(C_NUFIS) / material_xs(C_ABS)
 
         p % alive = .false.
         p % event = EVENT_ABSORB
@@ -214,7 +213,7 @@ contains
 
     ! Determine expected number of neutrons produced
     nu_t = p % wgt / keff * weight * &
-         material_xs % nu_fission / material_xs % total
+         material_xs(C_NUFIS) / material_xs(C_TOT)
 
     ! Sample number of neutrons produced
     if (prn() > nu_t - int(nu_t)) then

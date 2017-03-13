@@ -103,9 +103,9 @@ contains
           call macro_xs(p % material) % obj % calculate_xs(p % g, &
                p % coord(p % n_coord) % uvw, material_xs)
         else
-          material_xs % total      = ZERO
-          material_xs % absorption = ZERO
-          material_xs % nu_fission = ZERO
+          material_xs(C_TOT)      = ZERO
+          material_xs(C_ABS) = ZERO
+          material_xs(C_NUFIS) = ZERO
         end if
       end if
 
@@ -114,10 +114,10 @@ contains
            lattice_translation, next_level)
 
       ! Sample a distance to collision
-      if (material_xs % total == ZERO) then
+      if (material_xs(C_TOT) == ZERO) then
         d_collision = INFINITY
       else
-        d_collision = -log(prn()) / material_xs % total
+        d_collision = -log(prn()) / material_xs(C_TOT)
       end if
 
       ! Select smaller of the two distances
@@ -137,7 +137,7 @@ contains
       ! Score track-length estimate of k-eff
       if (run_mode == MODE_EIGENVALUE) then
         global_tally_tracklength = global_tally_tracklength + p % wgt * &
-             distance * material_xs % nu_fission
+             distance * material_xs(C_NUFIS)
       end if
 
       ! Score flux derivative accumulators for differential tallies.
@@ -168,7 +168,7 @@ contains
         ! Score collision estimate of keff
         if (run_mode == MODE_EIGENVALUE) then
           global_tally_collision = global_tally_collision + p % wgt * &
-               material_xs % nu_fission / material_xs % total
+               material_xs(C_NUFIS) / material_xs(C_TOT)
         end if
 
         ! score surface current tallies -- this has to be done before the collision
