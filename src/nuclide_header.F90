@@ -40,6 +40,7 @@ module nuclide_header
     real(8), allocatable :: xs(:, :) ! adjacent summed cross sections along the
                                      ! energy grid, in the order total, elastic,
                                      ! absorption, fission, nu_fission
+!DIR$ ATTRIBUTES ALIGN:64 :: xs
   end type SumXS
 
   type :: Nuclide
@@ -125,9 +126,9 @@ module nuclide_header
     integer :: index_grid      ! index on nuclide energy grid
     real(8) :: interp_factor   ! interpolation factor on nuc. energy grid
 
-    ! Summed reactions xs array
-    ! 1-total, 2-elastic, 3-absorption, 4-fission, 5-nu_fission
-    real(8), dimension(5) :: sumxs
+    ! Summed reactions xs array: total, elastic, absorption, fission, nu_fission
+    real(8), allocatable :: sumxs(:)
+!DIR$ ATTRIBUTES ALIGN:64 :: sumxs
 
     ! Information for S(a,b) use
     integer :: index_sab          ! index in sab_tables (zero means no table)
@@ -449,7 +450,7 @@ module nuclide_header
     do i = 1, n_temperature
       ! Allocate and initialize derived cross sections
       n_grid = size(this % grid(i) % energy)
-      allocate(this % sum_xs(i) % xs(5, n_grid))
+      allocate(this % sum_xs(i) % xs(8, n_grid))
       this % sum_xs(i) % xs = ZERO
     end do
 

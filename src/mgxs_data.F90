@@ -59,6 +59,11 @@ contains
     allocate(nuclides_MG(n_nuclides_total))
 !$omp parallel
     allocate(micro_xs(n_nuclides_total))
+    do i = 1, n_nuclides_total
+      ! Allocate and initialize summed cross sections
+      allocate(micro_xs(i) % sumxs(5))
+      micro_xs(i) % sumxs = ZERO
+    end do
 !$omp end parallel
 
     ! ==========================================================================

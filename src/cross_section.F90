@@ -39,6 +39,8 @@ contains
     logical :: check_sab     ! should we check for S(a,b) table?
 
     ! Set all material macroscopic cross sections to zero
+!!DIR$ ASSUME_ALIGNED material_xs(1): 64
+!DIR$ VECTOR ALIGNED
     material_xs = ZERO
 
     ! Exit subroutine if material is void
@@ -101,6 +103,9 @@ contains
         atom_density = mat % atom_density(i)
 
         ! Add contributions to material macroscopic cross section
+!!DIR$ ASSUME_ALIGNED material_xs(1): 64
+!!DIR$ ASSUME_ALIGNED micro_xs(i_nuclide) % sumxs(1): 64
+!DIR$ VECTOR ALIGNED
         material_xs = material_xs + atom_density * micro_xs(i_nuclide) % sumxs
       end do
     end associate
@@ -188,7 +193,7 @@ contains
           if (f > prn()) i_temp = i_temp + 1
         end select
 
-        associate (grid => nuc % grid(i_temp), xs => nuc % sum_xs(i_temp))
+        associate (grid => nuc % grid(i_temp))
           ! Determine the energy grid index using a logarithmic mapping to
           ! reduce the energy range over which a binary search needs to be
           ! performed
@@ -219,8 +224,13 @@ contains
           micro_xs(i_nuclide) % interp_factor = f
 
           ! Calculate microscopic nuclide cross sections
-          micro_xs(i_nuclide) % sumxs = &
-               (ONE - f) * xs % xs(1:5, i_grid) + f * xs % xs(1:5, i_grid + 1)
+!!DIR$ ASSUME_ALIGNED micro_xs(i_nuclide) % sumxs(1): 64
+!!DIR$ ASSUME_ALIGNED nuclides(i_nuclide) % sum_xs(i_temp) % xs(1,i_grid): 64
+!!DIR$ ASSUME_ALIGNED nuclides(i_nuclide) % sum_xs(i_temp) % xs(1,i_grid + 1): 64
+!DIR$ VECTOR ALIGNED
+          micro_xs(i_nuclide) % sumxs(1:5) = (ONE - f) * &
+               nuclides(i_nuclide) % sum_xs(i_temp) % xs(1:5, i_grid) + &
+               f * nuclides(i_nuclide) % sum_xs(i_temp) % xs(1:5, i_grid + 1)
 
         end associate
       end if
