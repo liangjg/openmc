@@ -646,7 +646,7 @@ contains
     end if
     write(ou,*)
 
-102 format (1X,A,T30,"= ",F8.5," +/- ",F8.5)
+102 format (1X,A,T30,"= ",F15.12," +/- ",F15.12)
 103 format (1X,A,T30,"= ",F8.5)
 
   end subroutine print_results

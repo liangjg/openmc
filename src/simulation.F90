@@ -25,6 +25,16 @@ module simulation
   use trigger,         only: check_triggers
   use tracking,        only: transport
   use volume_calc,     only: run_volume_calculations
+  use bank_header
+  use sensitivity,     only: ifptally_reset_batch, clutch_reset_batch, &
+                             tally_reset_history, sensitivity_cal_clutch, &
+                             sensitivity_cal, importance_cal, importance_cal_fm, &
+                             sen_statistics, reaction_rates, sensitivity_gpt_cal, &
+                             importance_gpt_cal, sensitivity_cal_gclutch, &
+                             importance_gpt_fm
+  use fissionmatrix,   only: count_source_for_fm
+                             
+
 
   implicit none
   private
@@ -42,6 +52,10 @@ contains
 
     type(Particle) :: p
     integer(8)     :: i_work
+    integer        :: i
+    integer        :: j
+    integer        :: k
+    integer        :: l
 
     ! Volume calculations
     if (size(volume_calcs) > 0) call run_volume_calculations()
@@ -111,7 +125,7 @@ contains
     end do BATCH_LOOP
 
     call time_active % stop()
-
+    
     ! ==========================================================================
     ! END OF RUN WRAPUP
 
@@ -119,6 +133,42 @@ contains
 
     ! Clear particle
     call p % clear()
+
+ !   do j = 1, sensitivities(1) % n_energy_bins
+ !!     if (master) print *, sensitivities(1) % results(1,1,1,1,j)
+ !     if (master) print *, sensitivities(1) % results(1,1,1,1,j) / &
+ !  log(sensitivities(1) % energystructure(j+1) / sensitivities(1) % energystructure(j))
+ !  end do
+
+ !   do j = 1, sensitivities(1) % n_energy_bins
+ ! !  if (master) print *, sensitivities(1) % results(2,1,1,1,j)
+ !     if (master) print *, sensitivities(1) % results(2,1,1,1,j)/ &
+ !  log(sensitivities(1) % energystructure(j+1) / sensitivities(1) % energystructure(j))
+ !   end do
+
+  ! do j = 1, sensitivities(1) % imp_mesh_bins
+  !   if (master) print *, sensitivities(1) % importance(j)
+  ! end do 
+
+  do i = 1, sensitivities(1) % n_nuclide_bins
+     do j = 1, sensitivities(1) % n_score_bins
+        do k = 1, sensitivities(1) % n_mesh_bins
+           do l = 1, sensitivities(1) % n_energy_bins
+              if (master) print *, sensitivities(1) % results(1,i,j,k,l)
+           end do
+        end do
+     end do
+  end do
+
+  do i = 1, sensitivities(1) % n_nuclide_bins
+     do j = 1, sensitivities(1) % n_score_bins
+        do k = 1, sensitivities(1) % n_mesh_bins
+           do l = 1, sensitivities(1) %  n_energy_bins
+              if (master) print *, sensitivities(1) % results(2,i,j,k,l)
+           end do
+        end do
+     end do
+  end do
 
   end subroutine run_simulation
 
@@ -165,6 +215,16 @@ contains
       end do
     end if
 
+    ! reset the cumulative tally for particle tracking, both in IFP and CLTUCH
+    if (sen_on) then
+       if (adjointmethod == 1 .AND. original) call tally_reset_history()
+       if (adjointmethod == 2 .AND. clutch_first) call tally_reset_history()
+       if (adjointmethod == 3 .AND. clutch_first) call tally_reset_history()
+       if (adjointmethod == 4 .AND. original) call tally_reset_history()
+       if (adjointmethod == 5 .AND. clutch_first) call tally_reset_history()
+       if (adjointmethod == 6 .AND. clutch_first) call tally_reset_history()
+    end if 
+
   end subroutine initialize_history
 
 !===============================================================================
@@ -195,6 +255,33 @@ contains
       call setup_active_usertallies()
 !$omp end parallel
     end if
+
+    ! ifp tally reset in CLUTCH sensitivities calculation
+    if (sen_on) then
+       if (adjointmethod == 1) then
+          if (current_batch > n_inactive) call ifptally_reset_batch()
+       end if 
+       if (adjointmethod == 2) then
+          if (current_batch <= n_inactive) call ifptally_reset_batch()
+          if (current_batch > n_inactive) call clutch_reset_batch()
+       end if
+       if (adjointmethod == 3) then   ! fission matrix approach
+          if (current_batch > 10 .AND. current_batch <= n_inactive) call count_source_for_fm()
+          if (current_batch > n_inactive) call clutch_reset_batch()
+       end if
+       if (adjointmethod == 4) then
+          if (current_batch > n_inactive) call ifptally_reset_batch()
+       end if   
+       if (adjointmethod == 5) then
+          if (current_batch <= n_inactive) call ifptally_reset_batch()
+          if (current_batch > n_inactive) call clutch_reset_batch()
+       end if
+       if (adjointmethod == 6) then   ! fission matrix approach
+          if (current_batch > 10 .AND. current_batch <= n_inactive) call count_source_for_fm()
+          if (current_batch > n_inactive) call clutch_reset_batch()
+       end if
+    end if 
+
 
     ! check CMFD initialize batch
     if (run_mode == MODE_EIGENVALUE) then
@@ -345,6 +432,35 @@ contains
       ! batch in case no state point is written
       call calculate_combined_keff()
     end if
+
+    ! sensitivities calculation by combining tallies and neutron importances
+    if (sen_on) then
+       if (adjointmethod == 1) then
+          if (asymptotic) call sensitivity_cal()
+       end if 
+       if (adjointmethod == 2) then
+          if (asymptotic) call importance_cal()
+          if (clutch_second) call sensitivity_cal_clutch()
+       end if
+       if (adjointmethod == 3) then 
+          if (current_batch == n_inactive) call importance_cal_fm()
+          if (clutch_second) call sensitivity_cal_clutch()
+       end if
+       if (adjointmethod == 4) then 
+          if (current_batch == n_inactive) call reaction_rates()
+          if (asymptotic) call sensitivity_gpt_cal()
+       end if
+       if (adjointmethod == 5) then
+          if (asymptotic) call importance_gpt_cal()
+          if (clutch_second) call sensitivity_cal_gclutch()
+       end if
+       if (adjointmethod == 6) then 
+          if (current_batch == n_inactive) call reaction_rates()
+          if (current_batch == n_inactive) call importance_gpt_fm()
+          if (clutch_second) call sensitivity_cal_gclutch()
+       end if
+       if (current_batch == n_max_batches) call sen_statistics()
+    end if 
 
   end subroutine finalize_batch
 

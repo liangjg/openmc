@@ -210,6 +210,10 @@ module constants
        N_D0    = 650, N_DC    = 699, N_T0   = 700, N_TC    = 749, N_3HE0  = 750, &
        N_3HEC  = 799, N_A0    = 800, N_AC   = 849, N_2N0   = 875, N_2NC   = 891
 
+  ! fission related parameters, chi and nubar, and capture cross section
+  integer, parameter :: &
+       FISSION_NUBAR = -100, FISSION_CHI = -200, SCORE_CAPTURE = -300
+
   ! ACE table types
   integer, parameter :: &
        ACE_NEUTRON   = 1, & ! continuous-energy neutron
@@ -322,6 +326,7 @@ module constants
        SCORE_FISS_Q_PROMPT      = -22, & ! prompt fission Q-value
        SCORE_FISS_Q_RECOV       = -23, & ! recoverable fission Q-value
        SCORE_DECAY_RATE         = -24    ! delayed neutron precursor decay rate
+       
 
   ! Maximum scattering order supported
   integer, parameter :: MAX_ANG_ORDER = 10

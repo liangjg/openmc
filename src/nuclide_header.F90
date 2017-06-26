@@ -514,6 +514,11 @@ module nuclide_header
           j = rx % xs(t) % threshold
           n = size(rx % xs(t) % value)
 
+          ! Perturbation
+          !if (this % name == "Pu239" .AND. rx % MT == ELASTIC) rx % xs(t) % value = rx % xs(t) % value * 1.01
+          !if (this % name == "Pu239" .AND. rx % MT == N_FISSION) rx % xs(t) % value = rx % xs(t) % value * 1.01    
+          !if (this % name == "Pu239" .AND. rx % MT == N_GAMMA) rx % xs(t) % value = rx % xs(t) % value * 1.01               
+
           ! Copy elastic
           if (rx % MT == ELASTIC) this % sum_xs(t) % elastic(:) = rx % xs(t) % value
 
@@ -597,8 +602,13 @@ module nuclide_header
     do t = 1, n_temperature
       if (this % fissionable) then
         do i = 1, size(this % sum_xs(t) % fission)
-          this % sum_xs(t) % nu_fission(i) = this % nu(this % grid(t) % energy(i), &
-               EMISSION_TOTAL) * this % sum_xs(t) % fission(i)
+          if (this % name == "Pu239") then
+              this % sum_xs(t) % nu_fission(i) = this % nu(this % grid(t) % energy(i), &
+              EMISSION_TOTAL) * this % sum_xs(t) % fission(i) !* 1.01
+          else
+              this % sum_xs(t) % nu_fission(i) = this % nu(this % grid(t) % energy(i), &
+              EMISSION_TOTAL) * this % sum_xs(t) % fission(i)
+          end if 
         end do
       else
         this % sum_xs(t) % nu_fission(:) = ZERO
