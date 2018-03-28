@@ -4281,14 +4281,7 @@ contains
     ! that the file will be ZZZAAAmM.h5.
     associate (nuc => nuclides(i_table))
 
-      if (nuc % metastable > 0) then
-        filename = trim(path_multipole) // trim(zero_padded(nuc % Z, 3)) // &
-             trim(zero_padded(nuc % A, 3)) // 'm' // &
-             trim(to_str(nuc % metastable)) // ".h5"
-      else
-        filename = trim(path_multipole) // trim(zero_padded(nuc % Z, 3)) // &
-             trim(zero_padded(nuc % A, 3)) // ".h5"
-      end if
+      filename = trim(path_multipole) // trim(nuc % name) // ".h5"
 
       ! Check if Multipole library exists and is readable
       inquire(FILE=filename, EXIST=file_exists, READ=readable)

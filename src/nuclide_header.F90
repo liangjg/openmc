@@ -15,9 +15,8 @@ module nuclide_header
   use list_header,            only: ListInt
   use math,                   only: faddeeva, w_derivative, &
                                     broaden_wmp_polynomials
-  use multipole_header,       only: FORM_RM, FORM_MLBW, MP_EA, RM_RT, RM_RA, &
-                                    RM_RF, MLBW_RT, MLBW_RX, MLBW_RA, MLBW_RF, &
-                                    FIT_T, FIT_A, FIT_F, MultipoleArray
+  use multipole_header,       only: MP_EA, MP_RT, MP_RA, MP_RF, MAX_CF_ORDER, &
+                                    CF_RT, CF_RA, CF_RF, MultipoleArray
   use message_passing
   use multipole_header,       only: MultipoleArray
   use product_header,         only: AngleEnergyContainer
@@ -829,6 +828,24 @@ contains
       end do
     end do
 
+    if (this % mp_present) then
+      ! Allocate logarithmic mapping for nuclide
+      allocate(this % multipole % grid_index(0:M))
+
+      ! Determine corresponding indices in nuclide grid to energies on
+      ! equal-logarithmic grid
+      j = 1
+      do k = 0, M
+        do while (log(this % multipole % w_grid(j + 1)/E_min) <= umesh(k))
+          ! Ensure that for isotopes where maxval(this % energy) << E_max
+          ! that there are no out-of-bounds issues.
+          if (j + 1 == size(this % multipole % w_grid)) exit
+          j = j + 1
+        end do
+        this % multipole % grid_index(k) = j
+      end do
+    end if
+
   end subroutine nuclide_init_grid
 
 !===============================================================================
@@ -875,7 +892,8 @@ contains
     ! Evaluate multipole or interpolate
     if (use_mp) then
       ! Call multipole kernel
-      call multipole_eval(this % multipole, E, sqrtkT, sig_t, sig_a, sig_f)
+      call multipole_eval(this % multipole, E, i_log_union, sqrtkT, &
+                          sig_t, sig_a, sig_f)
 
       micro_xs % total = sig_t
       micro_xs % absorption = sig_a
@@ -1113,24 +1131,21 @@ contains
 ! sections in the resolved resonance regions
 !===============================================================================
 
-  subroutine multipole_eval(multipole, E, sqrtkT, sig_t, sig_a, sig_f)
+  subroutine multipole_eval(multipole, E, i_grid, sqrtkT, sig_t, sig_a, sig_f)
     type(MultipoleArray), intent(in) :: multipole ! The windowed multipole
                                                   !  object to process.
     real(8), intent(in)              :: E         ! The energy at which to
                                                   !  evaluate the cross section
+    integer, intent(in)              :: i_grid    ! Index into logarithmic map
     real(8), intent(in)              :: sqrtkT    ! The temperature in the form
                                                   !  sqrt(kT), at which
                                                   !  to evaluate the XS.
     real(8), intent(out)             :: sig_t     ! Total cross section
     real(8), intent(out)             :: sig_a     ! Absorption cross section
     real(8), intent(out)             :: sig_f     ! Fission cross section
-    complex(8) :: psi_chi  ! The value of the psi-chi function for the
-                           !  asymptotic form
     complex(8) :: c_temp   ! complex temporary variable
     complex(8) :: w_val    ! The faddeeva function evaluated at Z
     complex(8) :: Z        ! sqrt(atomic weight ratio / kT) * (sqrt(E) - pole)
-    complex(8) :: sig_t_factor(multipole % num_l)
-    real(8) :: broadened_polynomials(multipole % fit_order + 1)
     real(8) :: sqrtE       ! sqrt(E), eV
     real(8) :: invE        ! 1/E, eV
     real(8) :: dopp        ! sqrt(atomic weight ratio / kT) = 1 / (2 sqrt(xi))
@@ -1138,57 +1153,56 @@ contains
     integer :: i_pole      ! index of pole
     integer :: i_poly      ! index of curvefit
     integer :: i_window    ! index of window
-    integer :: startw      ! window start pointer (for poles)
-    integer :: endw        ! window end pointer
+    integer :: startw      ! poles/curvefit start pointer
+    integer :: endw        ! poles/curvefit end pointer
+    real(8) :: broadened_polynomials(MAX_CF_ORDER + 1)
 
     ! ==========================================================================
     ! Bookkeeping
-
-    ! Define some frequently used variables.
-    sqrtE = sqrt(E)
-    invE = ONE / E
-
-    ! Locate us.
-    i_window = floor((sqrtE - sqrt(multipole % start_E)) / multipole % spacing &
-         + ONE)
-    startw = multipole % w_start(i_window)
-    endw = multipole % w_end(i_window)
-
-    ! Fill in factors.
-    if (startw <= endw) then
-      call compute_sig_t_factor(multipole, sqrtE, sig_t_factor)
-    end if
 
     ! Initialize the ouptut cross sections.
     sig_t = ZERO
     sig_a = ZERO
     sig_f = ZERO
 
+    ! Define some frequently used variables.
+    sqrtE = sqrt(E)
+    invE = ONE / E
+
+    ! Locate us.
+    i_window = multipole % grid_index(i_grid)
+    do while (E > multipole % w_grid(i_window+1))
+      i_window = i_window + 1
+    end do
+
     ! ==========================================================================
     ! Add the contribution from the curvefit polynomial.
 
-    if (sqrtkT /= ZERO .and. multipole % broaden_poly(i_window) == 1) then
+    startw = multipole % cf_offsets(i_window)
+    endw = multipole % cf_offsets(i_window+1) - 1
+
+    if (sqrtkT /= ZERO) then
       ! Broaden the curvefit.
       dopp = multipole % sqrtAWR / sqrtkT
-      call broaden_wmp_polynomials(E, dopp, multipole % fit_order + 1, &
-           broadened_polynomials)
-      do i_poly = 1, multipole % fit_order+1
-        sig_t = sig_t + multipole % curvefit(FIT_T, i_poly, i_window) &
-             * broadened_polynomials(i_poly)
-        sig_a = sig_a + multipole % curvefit(FIT_A, i_poly, i_window) &
-             * broadened_polynomials(i_poly)
+      call broaden_wmp_polynomials(E, dopp, endw-startw+1, &
+           broadened_polynomials(1:endw-startw+1))
+      do i_poly = startw, endw
+        sig_t = sig_t + multipole % curvefit(CF_RT, i_poly) &
+             * broadened_polynomials(i_poly-startw+1)
+        sig_a = sig_a + multipole % curvefit(CF_RA, i_poly) &
+             * broadened_polynomials(i_poly-startw+1)
         if (multipole % fissionable) then
-          sig_f = sig_f + multipole % curvefit(FIT_F, i_poly, i_window) &
-               * broadened_polynomials(i_poly)
+          sig_f = sig_f + multipole % curvefit(CF_RF, i_poly) &
+               * broadened_polynomials(i_poly-startw+1)
         end if
       end do
     else ! Evaluate as if it were a polynomial
       temp = invE
-      do i_poly = 1, multipole % fit_order+1
-        sig_t = sig_t + multipole % curvefit(FIT_T, i_poly, i_window) * temp
-        sig_a = sig_a + multipole % curvefit(FIT_A, i_poly, i_window) * temp
+      do i_poly = startw, endw
+        sig_t = sig_t + multipole % curvefit(CF_RT, i_poly) * temp
+        sig_a = sig_a + multipole % curvefit(CF_RA, i_poly) * temp
         if (multipole % fissionable) then
-          sig_f = sig_f + multipole % curvefit(FIT_F, i_poly, i_window) * temp
+          sig_f = sig_f + multipole % curvefit(CF_RF, i_poly) * temp
         end if
         temp = temp * sqrtE
       end do
@@ -1197,53 +1211,30 @@ contains
     ! ==========================================================================
     ! Add the contribution from the poles in this window.
 
+    startw = multipole % mp_offsets(i_window)
+    endw = multipole % mp_offsets(i_window+1) - 1
     if (sqrtkT == ZERO) then
       ! If at 0K, use asymptotic form.
       do i_pole = startw, endw
-        psi_chi = -ONEI / (multipole % data(MP_EA, i_pole) - sqrtE)
-        c_temp = psi_chi / E
-        if (multipole % formalism == FORM_MLBW) then
-          sig_t = sig_t + real(multipole % data(MLBW_RT, i_pole) * c_temp * &
-                               sig_t_factor(multipole % l_value(i_pole))) &
-                        + real(multipole % data(MLBW_RX, i_pole) * c_temp)
-          sig_a = sig_a + real(multipole % data(MLBW_RA, i_pole) * c_temp)
-          if (multipole % fissionable) then
-            sig_f = sig_f + real(multipole % data(MLBW_RF, i_pole) * c_temp)
-          end if
-        else if (multipole % formalism == FORM_RM) then
-          sig_t = sig_t + real(multipole % data(RM_RT, i_pole) * c_temp * &
-                               sig_t_factor(multipole % l_value(i_pole)))
-          sig_a = sig_a + real(multipole % data(RM_RA, i_pole) * c_temp)
-          if (multipole % fissionable) then
-            sig_f = sig_f + real(multipole % data(RM_RF, i_pole) * c_temp)
-          end if
+        c_temp = -ONEI*invE / (multipole % mp_data(MP_EA, i_pole) - sqrtE)
+        sig_t = sig_t + real(multipole % mp_data(MP_RT, i_pole) * c_temp)
+        sig_a = sig_a + real(multipole % mp_data(MP_RA, i_pole) * c_temp)
+        if (multipole % fissionable) then
+          sig_f = sig_f + real(multipole % mp_data(MP_RF, i_pole) * c_temp)
         end if
       end do
     else
       ! At temperature, use Faddeeva function-based form.
       dopp = multipole % sqrtAWR / sqrtkT
-      if (endw >= startw) then
-        do i_pole = startw, endw
-          Z = (sqrtE - multipole % data(MP_EA, i_pole)) * dopp
-          w_val = faddeeva(Z) * dopp * invE * SQRT_PI
-          if (multipole % formalism == FORM_MLBW) then
-            sig_t = sig_t + real((multipole % data(MLBW_RT, i_pole) * &
-                            sig_t_factor(multipole % l_value(i_pole)) + &
-                            multipole % data(MLBW_RX, i_pole)) * w_val)
-            sig_a = sig_a + real(multipole % data(MLBW_RA, i_pole) * w_val)
-            if (multipole % fissionable) then
-              sig_f = sig_f + real(multipole % data(MLBW_RF, i_pole) * w_val)
-            end if
-          else if (multipole % formalism == FORM_RM) then
-            sig_t = sig_t + real(multipole % data(RM_RT, i_pole) * w_val * &
-                                 sig_t_factor(multipole % l_value(i_pole)))
-            sig_a = sig_a + real(multipole % data(RM_RA, i_pole) * w_val)
-            if (multipole % fissionable) then
-              sig_f = sig_f + real(multipole % data(RM_RF, i_pole) * w_val)
-            end if
-          end if
-        end do
-      end if
+      do i_pole = startw, endw
+        Z = (sqrtE - multipole % mp_data(MP_EA, i_pole)) * dopp
+        w_val = faddeeva(Z) * dopp * invE * SQRT_PI
+        sig_t = sig_t + real(multipole % mp_data(MP_RT, i_pole) * w_val)
+        sig_a = sig_a + real(multipole % mp_data(MP_RA, i_pole) * w_val)
+        if (multipole % fissionable) then
+          sig_f = sig_f + real(multipole % mp_data(MP_RF, i_pole) * w_val)
+        end if
+      end do
     end if
   end subroutine multipole_eval
 
@@ -1258,6 +1249,7 @@ contains
                                                   !  object to process.
     real(8), intent(in)              :: E         ! The energy at which to
                                                   !  evaluate the cross section
+    !integer, intent(in)              :: i_grid    ! Index into logarithmic map
     real(8), intent(in)              :: sqrtkT    ! The temperature in the form
                                                   !  sqrt(kT), at which to
                                                   !  evaluate the XS.
@@ -1266,7 +1258,6 @@ contains
     real(8), intent(out)             :: sig_f     ! Fission cross section
     complex(8) :: w_val    ! The faddeeva function evaluated at Z
     complex(8) :: Z        ! sqrt(atomic weight ratio / kT) * (sqrt(E) - pole)
-    complex(8) :: sig_t_factor(multipole % num_l)
     real(8) :: sqrtE       ! sqrt(E), eV
     real(8) :: invE        ! 1/E, eV
     real(8) :: dopp        ! sqrt(atomic weight ratio / kT)
@@ -1287,16 +1278,11 @@ contains
     if (sqrtkT == ZERO) call fatal_error("Windowed multipole temperature &
          &derivatives are not implemented for 0 Kelvin cross sections.")
 
-    ! Locate us
-    i_window = floor((sqrtE - sqrt(multipole % start_E)) / multipole % spacing &
-         + ONE)
-    startw = multipole % w_start(i_window)
-    endw = multipole % w_end(i_window)
-
-    ! Fill in factors.
-    if (startw <= endw) then
-      call compute_sig_t_factor(multipole, sqrtE, sig_t_factor)
-    end if
+    ! Locate us.
+    i_window = multipole % grid_index(1)
+    do while (E <= multipole % w_grid(i_window+1))
+      i_window = i_window + 1
+    end do
 
     ! Initialize the ouptut cross sections.
     sig_t = ZERO
@@ -1311,26 +1297,18 @@ contains
     ! ==========================================================================
     ! Add the contribution from the poles in this window.
 
+    startw = multipole % mp_offsets(i_window)
+    endw = multipole % mp_offsets(i_window+1) - 1
+
     dopp = multipole % sqrtAWR / sqrtkT
     if (endw >= startw) then
       do i_pole = startw, endw
-        Z = (sqrtE - multipole % data(MP_EA, i_pole)) * dopp
+        Z = (sqrtE - multipole % mp_data(MP_EA, i_pole)) * dopp
         w_val = -invE * SQRT_PI * HALF * w_derivative(Z, 2)
-        if (multipole % formalism == FORM_MLBW) then
-          sig_t = sig_t + real((multipole % data(MLBW_RT, i_pole) * &
-                          sig_t_factor(multipole%l_value(i_pole)) + &
-                          multipole % data(MLBW_RX, i_pole)) * w_val)
-          sig_a = sig_a + real(multipole % data(MLBW_RA, i_pole) * w_val)
-          if (multipole % fissionable) then
-            sig_f = sig_f + real(multipole % data(MLBW_RF, i_pole) * w_val)
-          end if
-        else if (multipole % formalism == FORM_RM) then
-          sig_t = sig_t + real(multipole % data(RM_RT, i_pole) * w_val * &
-                               sig_t_factor(multipole % l_value(i_pole)))
-          sig_a = sig_a + real(multipole % data(RM_RA, i_pole) * w_val)
-          if (multipole % fissionable) then
-            sig_f = sig_f + real(multipole % data(RM_RF, i_pole) * w_val)
-          end if
+        sig_t = sig_t + real(multipole % mp_data(MP_RT, i_pole) * w_val)
+        sig_a = sig_a + real(multipole % mp_data(MP_RA, i_pole) * w_val)
+        if (multipole % fissionable) then
+          sig_f = sig_f + real(multipole % mp_data(MP_RF, i_pole) * w_val)
         end if
       end do
       sig_t = -HALF*multipole % sqrtAWR / sqrt(K_BOLTZMANN) * T**(-1.5) * sig_t
@@ -1338,38 +1316,6 @@ contains
       sig_f = -HALF*multipole % sqrtAWR / sqrt(K_BOLTZMANN) * T**(-1.5) * sig_f
     end if
   end subroutine multipole_deriv_eval
-
-!===============================================================================
-! COMPUTE_SIG_T_FACTOR calculates the sig_t_factor, a factor inside of the sig_t
-! equation not present in the sig_a and sig_f equations.
-!===============================================================================
-
-  subroutine compute_sig_t_factor(multipole, sqrtE, sig_t_factor)
-    type(MultipoleArray), intent(in)  :: multipole
-    real(8),              intent(in)  :: sqrtE
-    complex(8),           intent(out) :: sig_t_factor(multipole % num_l)
-
-    integer :: iL
-    real(8) :: twophi(multipole % num_l)
-    real(8) :: arg
-
-    do iL = 1, multipole % num_l
-      twophi(iL) = multipole % pseudo_k0RS(iL) * sqrtE
-      if (iL == 2) then
-        twophi(iL) = twophi(iL) - atan(twophi(iL))
-      else if (iL == 3) then
-        arg = 3.0_8 * twophi(iL) / (3.0_8 - twophi(iL)**2)
-        twophi(iL) = twophi(iL) - atan(arg)
-      else if (iL == 4) then
-        arg = twophi(iL) * (15.0_8 - twophi(iL)**2) &
-             / (15.0_8 - 6.0_8 * twophi(iL)**2)
-        twophi(iL) = twophi(iL) - atan(arg)
-      end if
-    end do
-
-    twophi = 2.0_8 * twophi
-    sig_t_factor = cmplx(cos(twophi), -sin(twophi), KIND=8)
-  end subroutine compute_sig_t_factor
 
 !===============================================================================
 ! 0K_ELASTIC_XS determines the microscopic 0K elastic cross section
