@@ -2113,6 +2113,9 @@ contains
           call close_group(group_id)
           call file_close(file_id)
 
+          ! Read multipole file into the appropriate entry on the nuclides array
+          if (temperature_multipole) call read_multipole_data(i_nuclide)
+
           ! Assign resonant scattering data
           if (res_scat_on) call nuclides(i_nuclide) % assign_0K_elastic_scattering()
 
@@ -2166,9 +2169,6 @@ contains
               call element_already_read % add(element)
             end if
           end if
-
-          ! Read multipole file into the appropriate entry on the nuclides array
-          if (temperature_multipole) call read_multipole_data(i_nuclide)
         end if
 
         ! Check if material is fissionable

@@ -260,6 +260,10 @@ contains
       end function
     end interface
 
+    if (.not. allocated(this % energy_0K) .and. this % mp_present) then
+      call multipole_linearize_elastic_0K(this)
+    end if
+
     this % resonant = .false.
     if (.not. res_scat_nuclides_empty()) then
       ! If resonant nuclides were specified, check the list explicitly
@@ -314,8 +318,6 @@ contains
 
     interface
       subroutine reaction_delete(rx) bind(C)
-        import C_PTR
-        type(C_PTR), value :: rx
       end subroutine reaction_delete
     end interface
 
@@ -1182,8 +1184,6 @@ contains
     real(8), intent(out)             :: sig_s     ! Scattering cross section
     real(8), intent(out)             :: sig_a     ! Absorption cross section
     real(8), intent(out)             :: sig_f     ! Fission cross section
-    complex(8) :: psi_chi  ! The value of the psi-chi function for the
-                           !  asymptotic form
     complex(8) :: c_temp   ! complex temporary variable
     complex(8) :: w_val    ! The faddeeva function evaluated at Z
     complex(8) :: Z        ! sqrt(atomic weight ratio / kT) * (sqrt(E) - pole)
@@ -1252,8 +1252,7 @@ contains
     if (sqrtkT == ZERO) then
       ! If at 0K, use asymptotic form.
       do i_pole = startw, endw
-        psi_chi = -ONEI / (multipole % data(MP_EA, i_pole) - sqrtE)
-        c_temp = psi_chi / E
+        c_temp = -ONEI * invE / (multipole % data(MP_EA, i_pole) - sqrtE)
         sig_s = sig_s + real(multipole % data(MP_RS, i_pole) * c_temp)
         sig_a = sig_a + real(multipole % data(MP_RA, i_pole) * c_temp)
         if (multipole % fissionable) then
@@ -1276,6 +1275,51 @@ contains
       end if
     end if
   end subroutine multipole_eval
+
+!===============================================================================
+! MULTIPOLE_EVAL_ELASTIC_0K evaluates the windowed multipole equations for
+! elastic cross section at 0 K
+!===============================================================================
+
+  function multipole_eval_elastic_0K(multipole, E) result(sig_s)
+    type(MultipoleArray), intent(in) :: multipole ! The windowed multipole
+                                                  !  object to process.
+    real(8), intent(in)              :: E         ! The energy at which to
+                                                  !  evaluate the cross section
+    real(8) :: sig_s    ! Scattering cross section
+    real(8) :: sqrtE       ! sqrt(E), eV
+    real(8) :: invE        ! 1/E, eV
+    real(8) :: temp        ! real temporary value
+    complex(8) :: c_temp   ! complex temporary variable
+    integer :: i_pole      ! index of pole
+    integer :: i_poly      ! index of curvefit
+    integer :: i_window    ! index of window
+    integer :: startw      ! window start pointer (for poles)
+    integer :: endw        ! window end pointer
+
+    sig_s = ZERO
+
+    if (E < multipole % E_min .or. E > multipole % E_max) return
+
+    sqrtE = sqrt(E)
+    invE = ONE / E
+
+    i_window = floor((sqrtE - sqrt(multipole % E_min)) / multipole % spacing &
+         + ONE)
+    startw = multipole % windows(1, i_window)
+    endw = multipole % windows(2, i_window)
+
+    temp = invE
+    do i_poly = 1, multipole % fit_order+1
+      sig_s = sig_s + multipole % curvefit(FIT_S, i_poly, i_window) * temp
+      temp = temp * sqrtE
+    end do
+
+    do i_pole = startw, endw
+      c_temp = -ONEI * invE / (multipole % data(MP_EA, i_pole) - sqrtE)
+      sig_s = sig_s + real(multipole % data(MP_RS, i_pole) * c_temp)
+    end do
+  end function multipole_eval_elastic_0K
 
 !===============================================================================
 ! MULTIPOLE_DERIV_EVAL evaluates the windowed multipole equations for the
@@ -1353,7 +1397,91 @@ contains
   end subroutine multipole_deriv_eval
 
 !===============================================================================
-! 0K_ELASTIC_XS determines the microscopic 0K elastic cross section
+! MULTIPOLE_LINEARIZE_ELASTIC_0K generates 0 K point-wise elastic xs from the
+! windowed multipole data
+!===============================================================================
+
+  subroutine multipole_linearize_elastic_0K(this)
+    class(Nuclide), intent(inout) :: this  ! Nuclide object
+
+    integer :: i_w                   ! index of windows
+    integer :: w_min, w_max          ! highest, lowest windows
+    integer :: i_p                   ! index of poles
+    integer :: startp, endp          ! start, end poles
+    real(8) :: E, E_l, E_h           ! energies
+    real(8) :: xs, xs_l, xs_h        ! cross sections
+    real(8) :: xs_interp             ! interpolated cross sections
+    type(VectorReal) :: e_grid       ! energy grid for 0 K
+    type(VectorReal) :: e_grid_pre   ! predefined energy grid
+    type(VectorReal) :: xs_array     ! elastic xs array for 0 K
+    type(VectorReal) :: xs_array_pre ! predefined elastic xs array
+    type(MultipoleArray),  pointer :: mp
+
+    mp => this % multipole
+
+    ! Lowest window for resonance scattering
+    E = max(res_scat_energy_min, mp % E_min)
+    w_min = floor((sqrt(E) - sqrt(mp % E_min)) / mp % spacing + ONE)
+
+    ! Highest window for resonance scattering
+    E = max(res_scat_energy_max, mp % E_max)
+    w_max = floor((sqrt(E) - sqrt(mp % E_min)) / mp % spacing + ONE)
+
+    ! Firstly, get a predefined energy grid using the window boundaries and pole
+    ! positions. The energy array is saved in reverse order.
+    do i_w = w_max, w_min, -1
+      ! window boundary
+      E_h = (sqrt(mp % E_min) + i_w * mp % spacing)**TWO
+      E_l = (sqrt(mp % E_min) + (i_w - ONE) * mp % spacing)**TWO
+
+      ! save the higher boundary
+      call e_grid_pre % push_back(E_h)
+      call xs_array_pre % push_back(multipole_eval_elastic_0K(mp, E_h))
+
+      do i_p = mp % windows(2, i_w), mp % windows(1, i_w), -1
+        E = real(mp % data(MP_EA, i_p))
+        if (E < E_h .and. E > E_l) then
+          call e_grid_pre % push_back(E)
+          call xs_array_pre % push_back(multipole_eval_elastic_0K(mp, E))
+        end if
+      end do
+    end do
+
+    ! Secondly, insert energy points to get a finer energy grid which is
+    ! linearly interpolatable
+
+    ! first point
+    call e_grid % push_back(E_l) 
+    call xs_array % push_back(multipole_eval_elastic_0K(mp, E_l))
+
+    ! Test and insert middle points
+    do while (e_grid_pre % size() > 0)
+      E_l = e_grid % data(e_grid % size())
+      xs_l = xs_array % data(e_grid % size())
+      E_h = e_grid_pre % data(e_grid_pre % size())
+      xs_h = xs_array_pre % data(e_grid_pre % size())
+      E = (E_l + E_h) / TWO
+      xs = multipole_eval_elastic_0K(mp, E)
+      xs_interp = (xs_l + xs_h) / TWO
+      if (abs(xs_interp / xs - ONE) < 0.001_8) then
+        call e_grid % push_back(E_h)
+        call xs_array % push_back(xs_h)
+        call e_grid_pre % pop_back()
+        call xs_array_pre % pop_back()
+      else
+        call e_grid_pre % push_back(E)
+        call xs_array_pre % push_back(xs)
+      end if
+   end do
+
+   ! Move data into appropriate entry on the nuclide array
+   call move_alloc(FROM=e_grid % data, TO=this % energy_0K)
+   call move_alloc(FROM=xs_array % data, TO=this % elastic_0K)
+
+  end subroutine multipole_linearize_elastic_0K
+
+!===============================================================================
+! ELASTIC_XS_0K determines the microscopic 0K elastic cross section
 ! for a given nuclide at the trial relative energy used in resonance scattering
 !===============================================================================
 
