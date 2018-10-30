@@ -397,8 +397,8 @@ class WindowedMultipole(EqualityMixin):
         Returns
         -------
         3-tuple of Real
-            Total, absorption, and fission microscopic cross sections at the
-            given energy and temperature.
+            Scattering, absorption, and fission microscopic cross sections at
+            the given energy and temperature.
 
         """
 
@@ -490,8 +490,8 @@ class WindowedMultipole(EqualityMixin):
         Returns
         -------
         3-tuple of Real or 3-tuple of numpy.ndarray
-            Total, absorption, and fission microscopic cross sections at the
-            given energy and temperature.
+            Scattering, absorption, and fission microscopic cross sections at
+            the given energy and temperature.
 
         """
 

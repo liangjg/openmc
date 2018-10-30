@@ -1253,7 +1253,7 @@ contains
     if (sqrtkT == ZERO) then
       ! If at 0K, use asymptotic form.
       do i_pole = startw, endw
-        c_temp = -ONEI * invE / (multipole % data(MP_EA, i_pole) - sqrtE)
+        c_temp = ONEI * invE / (sqrtE - multipole % data(MP_EA, i_pole))
         sig_s = sig_s + real(multipole % data(MP_RS, i_pole) * c_temp)
         sig_a = sig_a + real(multipole % data(MP_RA, i_pole) * c_temp)
         if (multipole % fissionable) then
@@ -1317,7 +1317,7 @@ contains
     end do
 
     do i_pole = startw, endw
-      c_temp = -ONEI * invE / (multipole % data(MP_EA, i_pole) - sqrtE)
+      c_temp = ONEI * invE / (sqrtE - multipole % data(MP_EA, i_pole))
       sig_s = sig_s + real(multipole % data(MP_RS, i_pole) * c_temp)
     end do
   end function multipole_eval_elastic_0K
@@ -1454,7 +1454,7 @@ contains
     ! finer energy grid that is accurate enough for linear interpolation
 
     ! Lowest point
-    call e_grid % push_back(E_l) 
+    call e_grid % push_back(E_l)
     call xs_array % push_back(multipole_eval_elastic_0K(mp, E_l))
 
     ! Test midpoints and save them if necessary
