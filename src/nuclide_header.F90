@@ -319,6 +319,8 @@ contains
 
     interface
       subroutine reaction_delete(rx) bind(C)
+        import C_PTR
+        type(C_PTR), value :: rx
       end subroutine reaction_delete
     end interface
 
@@ -1278,51 +1280,6 @@ contains
   end subroutine multipole_eval
 
 !===============================================================================
-! MULTIPOLE_EVAL_ELASTIC_0K evaluates the windowed multipole equations for
-! elastic cross section at 0 K
-!===============================================================================
-
-  function multipole_eval_elastic_0K(multipole, E) result(sig_s)
-    type(MultipoleArray), intent(in) :: multipole ! The windowed multipole
-                                                  !  object to process.
-    real(8), intent(in)              :: E         ! The energy at which to
-                                                  !  evaluate the cross section
-    real(8) :: sig_s       ! Scattering cross section
-    real(8) :: sqrtE       ! sqrt(E), eV
-    real(8) :: invE        ! 1/E, eV
-    real(8) :: temp        ! real temporary value
-    complex(8) :: c_temp   ! complex temporary variable
-    integer :: i_pole      ! index of pole
-    integer :: i_poly      ! index of curvefit
-    integer :: i_window    ! index of window
-    integer :: startw      ! window start pointer (for poles)
-    integer :: endw        ! window end pointer
-
-    sig_s = ZERO
-
-    if (E < multipole % E_min .or. E > multipole % E_max) return
-
-    sqrtE = sqrt(E)
-    invE = ONE / E
-
-    i_window = floor((sqrtE - sqrt(multipole % E_min)) / multipole % spacing &
-         + ONE)
-    startw = multipole % windows(1, i_window)
-    endw = multipole % windows(2, i_window)
-
-    temp = invE
-    do i_poly = 1, multipole % fit_order+1
-      sig_s = sig_s + multipole % curvefit(FIT_S, i_poly, i_window) * temp
-      temp = temp * sqrtE
-    end do
-
-    do i_pole = startw, endw
-      c_temp = ONEI * invE / (sqrtE - multipole % data(MP_EA, i_pole))
-      sig_s = sig_s + real(multipole % data(MP_RS, i_pole) * c_temp)
-    end do
-  end function multipole_eval_elastic_0K
-
-!===============================================================================
 ! MULTIPOLE_DERIV_EVAL evaluates the windowed multipole equations for the
 ! derivative of cross sections in the resolved resonance regions with respect to
 ! temperature.
@@ -1413,6 +1370,7 @@ contains
     real(8) :: E, E_l, E_h           ! energies
     real(8) :: xs, xs_l, xs_h        ! cross sections
     real(8) :: xs_interp             ! interpolated cross sections
+    real(8) :: sig_s, sig_a, sig_f   ! Intermediate cross sections
     type(VectorReal) :: e_grid       ! energy grid for 0 K
     type(VectorReal) :: e_grid_pre   ! predefined/buffer energy grid
     type(VectorReal) :: xs_array     ! elastic xs array for 0 K
@@ -1430,22 +1388,24 @@ contains
     w_max = floor((sqrt(E) - sqrt(mp % E_min)) / mp % spacing + ONE)
 
     ! Generate a predefined energy grid using the window boundaries and pole
-    ! positions. The energy array is saved in reverse order.
+    ! positions. The energy array is saved in the reverse order.
     do i_w = w_max, w_min, -1
       ! window boundary
       E_h = min(mp % E_max, (sqrt(mp % E_min) + i_w * mp % spacing)**TWO)
       E_l = (sqrt(mp % E_min) + (i_w - ONE) * mp % spacing)**TWO
 
       ! Save the higher boundary
+      call multipole_eval(mp, E_h, ZERO, sig_s, sig_a, sig_f)
       call e_grid_pre % push_back(E_h)
-      call xs_array_pre % push_back(multipole_eval_elastic_0K(mp, E_h))
+      call xs_array_pre % push_back(sig_s)
 
-      ! Save the resonance positions (real part of the squared poles)
+      ! Save the resonance positions (real part of the poles squared)
       do i_p = mp % windows(2, i_w), mp % windows(1, i_w), -1
         E = real(mp % data(MP_EA, i_p)**2)
         if (E < E_h .and. E > E_l) then
+          call multipole_eval(mp, E, ZERO, sig_s, sig_a, sig_f)
           call e_grid_pre % push_back(E)
-          call xs_array_pre % push_back(multipole_eval_elastic_0K(mp, E))
+          call xs_array_pre % push_back(sig_s)
         end if
       end do
     end do
@@ -1454,8 +1414,9 @@ contains
     ! finer energy grid that is accurate enough for linear interpolation
 
     ! Lowest point
+    call multipole_eval(mp, E_l, ZERO, sig_s, sig_a, sig_f)
     call e_grid % push_back(E_l)
-    call xs_array % push_back(multipole_eval_elastic_0K(mp, E_l))
+    call xs_array % push_back(sig_s)
 
     ! Test midpoints and save them if necessary
     do while (e_grid_pre % size() > 0)
@@ -1468,7 +1429,7 @@ contains
 
       ! Get the midpoint and interpolate
       E = (E_l + E_h) / TWO
-      xs = multipole_eval_elastic_0K(mp, E)
+      call multipole_eval(mp, E, ZERO, xs, sig_a, sig_f)
       xs_interp = (xs_l + xs_h) / TWO
 
       ! Save the higher point if midpoint interpolation is accurate enough
