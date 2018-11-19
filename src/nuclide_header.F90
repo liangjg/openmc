@@ -494,7 +494,7 @@ contains
     end do
 
     ! Check for 0K energy grid
-    if (object_exists(energy_group, '0K')) then
+    if (.not. this  % mp_present .and. object_exists(energy_group, '0K')) then
       energy_dset = open_dataset(energy_group, '0K')
       call get_shape(energy_dset, dims)
       allocate(this % energy_0K(int(dims(1), 4)))
@@ -522,7 +522,7 @@ contains
 
       ! Check for 0K elastic scattering
       if (this % reactions(i) % MT == 2) then
-        if (object_exists(rx_group, '0K')) then
+        if (.not. this  % mp_present .and. object_exists(rx_group, '0K')) then
           temp_group = open_group(rx_group, '0K')
           xs = open_dataset(temp_group, 'xs')
           call get_shape(xs, dims)

@@ -2098,6 +2098,9 @@ contains
           filename = library_path(LIBRARY_NEUTRON, to_lower(name))
           i_nuclide = nuclide_dict % get(to_lower(name))
 
+          ! Read multipole file into the nuclides array
+          if (temperature_multipole) call read_multipole_data(i_nuclide, name)
+
           call write_message('Reading ' // trim(name) // ' from ' // &
                trim(filename), 6)
 
@@ -2112,9 +2115,6 @@ contains
                master, i_nuclide)
           call close_group(group_id)
           call file_close(file_id)
-
-          ! Read multipole file into the appropriate entry on the nuclides array
-          if (temperature_multipole) call read_multipole_data(i_nuclide)
 
           ! Assign resonant scattering data
           if (res_scat_on) call nuclides(i_nuclide) % assign_0K_elastic_scattering()
@@ -2290,9 +2290,10 @@ contains
 ! directory and loads it using multipole_read
 !===============================================================================
 
-  subroutine read_multipole_data(i_table)
+  subroutine read_multipole_data(i_table, name)
 
     integer, intent(in) :: i_table  ! index in nuclides/sab_tables
+    character(MAX_WORD_LEN), intent(in) :: name
 
     logical :: file_exists                 ! Does multipole library exist?
     character(7) :: readable               ! Is multipole library readable?
@@ -2304,8 +2305,8 @@ contains
     associate (nuc => nuclides(i_table))
 
       ! Look for WMP data in cross_sections.xml
-      if (library_present(LIBRARY_WMP, to_lower(nuc % name))) then
-        filename = library_path(LIBRARY_WMP, to_lower(nuc % name))
+      if (library_present(LIBRARY_WMP, to_lower(name))) then
+        filename = library_path(LIBRARY_WMP, to_lower(name))
       else
         nuc % mp_present = .false.
         return
@@ -2317,12 +2318,12 @@ contains
         nuc % mp_present = .false.
         return
       elseif (readable(1:3) == 'NO') then
-        call fatal_error("Multipole library '" // trim(filename) // "' is not &
+        call fatal_error("Mle library '" // trim(filename) // "' is not &
              &readable! Change file permissions with chmod command.")
       end if
 
       ! Display message
-      call write_message("Reading " // trim(nuc % name) // " WMP data from " &
+      call write_message("Reading " // trim(name) // " WMP data from " &
            // filename, 6)
 
       ! Open file and make sure version is sufficient
@@ -2330,7 +2331,7 @@ contains
       call check_wmp_version(file_id)
 
       ! Read nuclide data from HDF5
-      group_id = open_group(file_id, nuc % name)
+      group_id = open_group(file_id, name)
       allocate(nuc % multipole)
       call nuc % multipole % from_hdf5(group_id)
       nuc % mp_present = .true.
