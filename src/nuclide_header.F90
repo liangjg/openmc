@@ -1444,14 +1444,14 @@ contains
         call e_grid_pre % push_back(E)
         call xs_array_pre % push_back(xs)
       end if
-   end do
+    end do
 
-   ! Move data into appropriate entry on the nuclide array
-   n = e_grid % size()
-   allocate(this % energy_0K(n))
-   this % energy_0K = e_grid % data(1:n)
-   allocate(this % elastic_0K(n))
-   this % elastic_0K = xs_array % data(1:n)
+    ! Move data into appropriate entry on the nuclide array
+    n = e_grid % size()
+    allocate(this % energy_0K(n))
+    this % energy_0K = e_grid % data(1:n)
+    allocate(this % elastic_0K(n))
+    this % elastic_0K = xs_array % data(1:n)
 
   end subroutine multipole_linearize_elastic_0K
 
