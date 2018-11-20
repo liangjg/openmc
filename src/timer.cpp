@@ -25,7 +25,7 @@ Timer time_transport;
 // Timer implementation
 //==============================================================================
 
-void Timer::start ()
+void Timer::start()
 {
   running_ = true;
   start_ = clock::now();
