@@ -115,6 +115,10 @@ std::string reaction_name(int mt)
     return  "current";
   } else if (mt == SCORE_EVENTS) {
     return  "events";
+  } else if (mt == SCORE_EVENTS_SURFACE) {
+    return  "events surface";
+  } else if (mt == SCORE_EVENTS_COLLISION) {
+    return  "events collision";
   } else if (mt == SCORE_INVERSE_VELOCITY) {
     return  "inverse-velocity";
   } else if (mt == SCORE_FISS_Q_PROMPT) {

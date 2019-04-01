@@ -366,6 +366,8 @@ constexpr int SCORE_INVERSE_VELOCITY   {-13}; // flux-weighted inverse velocity
 constexpr int SCORE_FISS_Q_PROMPT      {-14}; // prompt fission Q-value
 constexpr int SCORE_FISS_Q_RECOV       {-15}; // recoverable fission Q-value
 constexpr int SCORE_DECAY_RATE         {-16}; // delayed neutron precursor decay rate
+constexpr int SCORE_EVENTS_SURFACE     {-17}; // # events of crossing surfaces
+constexpr int SCORE_EVENTS_COLLISION   {-18}; // # events of collisions
 
 // Tally map bin finding
 constexpr int NO_BIN_FOUND {-1};

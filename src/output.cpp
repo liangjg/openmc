@@ -610,6 +610,8 @@ const std::unordered_map<int, const char*> score_names = {
   {SCORE_NU_FISSION,         "Nu-Fission Rate"},
   {SCORE_KAPPA_FISSION,      "Kappa-Fission Rate"},
   {SCORE_EVENTS,             "Events"},
+  {SCORE_EVENTS_SURFACE,     "Events of Crossing Surface"},
+  {SCORE_EVENTS_COLLISION,   "Events of Collision"},
   {SCORE_DECAY_RATE,         "Decay Rate"},
   {SCORE_DELAYED_NU_FISSION, "Delayed-Nu-Fission Rate"},
   {SCORE_PROMPT_NU_FISSION,  "Prompt-Nu-Fission Rate"},

@@ -115,6 +115,12 @@ score_str_to_int(std::string score_str)
   if (score_str == "events")
     return SCORE_EVENTS;
 
+  if (score_str == "events_surface")
+    return SCORE_EVENTS_SURFACE;
+
+  if (score_str == "events_collision")
+    return SCORE_EVENTS_COLLISION;
+
   if (score_str == "elastic" || score_str == "(n,elastic)")
     return ELASTIC;
 
@@ -767,6 +773,8 @@ void read_tallies_xml()
           case SCORE_NU_FISSION:
           case SCORE_CURRENT:
           case SCORE_EVENTS:
+          case SCORE_EVENTS_SURFACE:
+          case SCORE_EVENTS_COLLISION:
           case SCORE_DELAYED_NU_FISSION:
           case SCORE_PROMPT_NU_FISSION:
           case SCORE_DECAY_RATE:

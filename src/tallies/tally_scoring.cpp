@@ -329,7 +329,7 @@ score_general_ce(Particle* p, int i_tally, int start_index,
     auto score_bin = tally.scores_[i];
     auto score_index = start_index + i;
 
-    double score;
+    double score = 0.;
 
     switch (score_bin) {
 
@@ -1000,6 +1000,22 @@ score_general_ce(Particle* p, int i_tally, int start_index,
       break;
 
 
+    case SCORE_EVENTS_SURFACE:
+      // Count the number of crossing surface events
+      if (p->event_ < 0) {
+        score = 1.;
+      }
+      break;
+
+
+    case SCORE_EVENTS_COLLISION:
+      // Count the number of collision events
+      if (p->event_ > 0) {
+        score = 1.;
+      }
+      break;
+
+
     case ELASTIC:
       if (tally.estimator_ == ESTIMATOR_ANALOG) {
         // Check if event MT matches
@@ -1274,7 +1290,7 @@ score_general_mg(const Particle* p, int i_tally, int start_index,
     auto score_bin = tally.scores_[i];
     auto score_index = start_index + i;
 
-    double score;
+    double score = 0.;
 
     switch (score_bin) {
 
@@ -1904,6 +1920,22 @@ score_general_mg(const Particle* p, int i_tally, int start_index,
     case SCORE_EVENTS:
       // Simply count the number of scoring events
       score = 1.;
+      break;
+
+
+    case SCORE_EVENTS_SURFACE:
+      // Count the number of crossing surface events
+      if (p->event_ < 0) {
+        score = 1.;
+      }
+      break;
+
+
+    case SCORE_EVENTS_COLLISION:
+      // Count the number of collision events
+      if (p->event_ > 0) {
+        score = 1.;
+      }
       break;
 
 
