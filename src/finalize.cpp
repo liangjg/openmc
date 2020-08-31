@@ -162,6 +162,14 @@ int openmc_reset()
   simulation::k_abs_tra = 0.0;
   simulation::k_sum = {0.0, 0.0};
 
+  settings::cmfd_run = false;
+
+  return 0;
+}
+
+int openmc_reset_timers()
+{
+  reset_timers();
   return 0;
 }
 

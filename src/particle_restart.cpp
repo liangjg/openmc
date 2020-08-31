@@ -24,8 +24,7 @@ namespace openmc {
 void read_particle_restart(Particle& p, RunMode& previous_run_mode)
 {
   // Write meessage
-  write_message("Loading particle restart file " +
-    settings::path_particle_restart + "...", 5);
+  write_message(5, "Loading particle restart file {}", settings::path_particle_restart);
 
   // Open file
   hid_t file_id = file_open(settings::path_particle_restart, 'r');
@@ -74,6 +73,9 @@ void run_particle_restart()
   // Set verbosity high
   settings::verbosity = 10;
 
+  // Initialize nuclear data (energy limits, log grid, etc.)
+  initialize_data();
+
   // Initialize the particle to be tracked
   Particle p;
 
@@ -115,7 +117,7 @@ void run_particle_restart()
     p.flux_derivs_.resize(model::tally_derivs.size(), 0.0);
     std::fill(p.flux_derivs_.begin(), p.flux_derivs_.end(), 0.0);
   }
-  
+
   // Allocate space for tally filter matches
   p.filter_matches_.resize(model::tally_filters.size());
 
@@ -123,7 +125,7 @@ void run_particle_restart()
   transport_history_based_single_particle(p);
 
   // Write output if particle made it
-  print_particle(&p);
+  print_particle(p);
 }
 
 } // namespace openmc

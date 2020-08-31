@@ -11,6 +11,7 @@
 #include "openmc/position.h"
 #include "openmc/constants.h"
 #include "openmc/cell.h"
+#include "openmc/error.h"
 #include "openmc/geometry.h"
 #include "openmc/particle.h"
 #include "openmc/xml_interface.h"
@@ -26,8 +27,8 @@ class Plot;
 
 namespace model {
 
-extern std::vector<Plot> plots; //!< Plot instance container
 extern std::unordered_map<int, int> plot_map; //!< map of plot ids to index
+extern std::vector<Plot> plots; //!< Plot instance container
 
 extern uint64_t plotter_prn_seeds[N_STREAMS]; // Random number seeds used for plotter
 extern int plotter_stream; // Stream index used by the plotter
@@ -154,10 +155,8 @@ T PlotBase::get_map() const {
     in_i = 1;
     out_i = 2;
     break;
-#ifdef __GNUC__
   default:
-    __builtin_unreachable();
-#endif
+    UNREACHABLE();
   }
 
   // set initial position
@@ -183,13 +182,13 @@ T PlotBase::get_map() const {
         p.r()[in_i] = xyz[in_i] + in_pixel * x;
         p.n_coord_ = 1;
         // local variables
-        bool found_cell = find_cell(&p, 0);
+        bool found_cell = find_cell(p, 0);
         j = p.n_coord_ - 1;
         if (level >=0) {j = level + 1;}
         if (found_cell) {
           data.set_value(y, x, p, j);
         }
-        if (color_overlaps_ && check_cell_overlap(&p, false)) {
+        if (color_overlaps_ && check_cell_overlap(p, false)) {
           data.set_overlap(y, x);
         }
       } // inner for

@@ -35,8 +35,8 @@ enum class LatticeType {
 class Lattice;
 
 namespace model {
-  extern std::vector<std::unique_ptr<Lattice>> lattices;
   extern std::unordered_map<int32_t, int32_t> lattice_map;
+  extern std::vector<std::unique_ptr<Lattice>> lattices;
 } // namespace model
 
 //==============================================================================
@@ -77,7 +77,8 @@ public:
   {offsets_.resize(n_maps * universes_.size(), C_NONE);}
 
   //! Populate the distribcell offset tables.
-  int32_t fill_offset_table(int32_t offset, int32_t target_univ_id, int map);
+  int32_t fill_offset_table(int32_t offset, int32_t target_univ_id, int map,
+    std::unordered_map<int32_t, int32_t>& univ_count_memo);
 
   //! \brief Check lattice indices.
   //! \param i_xyz[3] The indices for a lattice tile.
@@ -127,6 +128,13 @@ public:
   //! \return Distribcell offset i.e. the largest instance number for the target
   //!  cell found in the geometry tree under this lattice tile.
   virtual int32_t& offset(int map, const int i_xyz[3]) = 0;
+
+  //! \brief Get the distribcell offset for a lattice tile.
+  //! \param The map index for the target cell.
+  //! \param indx The index for a lattice tile.
+  //! \return Distribcell offset i.e. the largest instance number for the target
+  //!  cell found in the geometry tree for this lattice index.
+  virtual int32_t offset(int map, int indx) const = 0;
 
   //! \brief Convert an array index to a useful human-readable string.
   //! \param indx The index for a lattice tile.
@@ -219,6 +227,8 @@ public:
 
   int32_t& offset(int map, const int i_xyz[3]);
 
+  int32_t offset(int map, int indx) const;
+
   std::string index_to_string(int indx) const;
 
   void to_hdf5_inner(hid_t group_id) const;
@@ -260,6 +270,8 @@ public:
   bool is_valid_index(int indx) const;
 
   int32_t& offset(int map, const int i_xyz[3]);
+
+  int32_t offset(int map, int indx) const;
 
   std::string index_to_string(int indx) const;
 

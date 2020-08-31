@@ -12,33 +12,35 @@ Installation and Configuration
 Installing on Linux/Mac with conda-forge
 ----------------------------------------
 
-Conda_ is an open source package management system and environment management
-system for installing multiple versions of software packages and their
-dependencies and switching easily between them. `conda-forge
-<https://conda-forge.github.io/>`_ is a community-led conda channel of
-installable packages. For instructions on installing conda, please consult their
-`documentation
-<https://docs.conda.io/projects/conda/en/latest/user-guide/install/>`_.
-
-Once you have `conda` installed on your system, add the `conda-forge` channel to
-your configuration with:
+`Conda <http://conda.pydata.org/docs/>`_ is an open source package management
+system and environment management system for installing multiple versions of
+software packages and their dependencies and switching easily between them. If
+you have `conda` installed on your system, OpenMC can be installed via the
+`conda-forge` channel. First, add the `conda-forge` channel with:
 
 .. code-block:: sh
 
     conda config --add channels conda-forge
 
-Once the `conda-forge` channel has been enabled, OpenMC can then be installed
-with:
+To list the versions of OpenMC that are available on the `conda-forge` channel,
+in your terminal window or an Anaconda Prompt run:
+
+.. code-block:: sh 
+
+    conda search openmc
+    
+OpenMC can then be installed with:
 
 .. code-block:: sh
 
-    conda install openmc
-
-It is possible to list all of the versions of OpenMC available on your platform with:
+    conda create -n openmc-env openmc
+    
+This will install OpenMC in a conda environment called `openmc-env`. To activate
+the environment, run:
 
 .. code-block:: sh
 
-    conda search openmc --channel conda-forge
+    conda activate openmc-env
 
 .. _install_ppa:
 
@@ -404,12 +406,10 @@ to install the Python package in :ref:`"editable" mode <devguide_editable>`.
 Prerequisites
 -------------
 
-The Python API works with Python 3.4+. In addition to Python itself, the API
+The Python API works with Python 3.5+. In addition to Python itself, the API
 relies on a number of third-party packages. All prerequisites can be installed
 using Conda_ (recommended), pip_, or through the package manager in most Linux
-distributions. To run simulations in parallel using MPI, it is recommended to
-build mpi4py, HDF5, h5py from source, in that order, using the same compilers
-as for OpenMC.
+distributions.
 
 .. admonition:: Required
    :class: error
@@ -460,6 +460,29 @@ as for OpenMC.
 
    `pytest <https://docs.pytest.org>`_
       The pytest framework is used for unit testing the Python API.
+
+If you are running simulations that require OpenMC's Python bindings to the C
+API (including depletion and CMFD), it is recommended to build ``h5py`` (and
+``mpi4py``, if you are using MPI) using the same compilers and HDF5 version as
+for OpenMC. Thus, the install process would proceed as follows:
+
+.. code-block:: sh
+
+    mkdir build && cd build
+    HDF5_ROOT=<path to HDF5> CXX=<path to mpicxx> cmake ..
+    make
+    make install
+
+    cd ..
+    MPICC=<path to mpicc> pip install mpi4py
+    HDF5_DIR=<path to HDF5> pip install --no-binary=h5py h5py
+
+If you are using parallel HDF5, you'll also need to make sure the right MPI
+wrapper is used when installing h5py:
+
+.. code-block:: sh
+
+    CC=<path to mpicc> HDF5_MPI=ON HDF5_DIR=<path to HDF5> pip install --no-binary=h5py h5py
 
 .. _usersguide_nxml:
 

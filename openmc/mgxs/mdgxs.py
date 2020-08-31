@@ -1,27 +1,25 @@
 from collections import OrderedDict
-from collections.abc import Iterable
+import copy
 import itertools
 from numbers import Integral
-import warnings
 import os
-import sys
-import copy
-from abc import ABCMeta
 
 import numpy as np
 
 import openmc
-from openmc.mgxs import MGXS
-from openmc.mgxs.mgxs import _DOMAIN_TO_FILTER
 import openmc.checkvalue as cv
+from openmc.mgxs import MGXS
+from .mgxs import _DOMAIN_TO_FILTER
 
 
 # Supported cross section types
-MDGXS_TYPES = ['delayed-nu-fission',
-               'chi-delayed',
-               'beta',
-               'decay-rate',
-               'delayed-nu-fission matrix']
+MDGXS_TYPES = (
+    'delayed-nu-fission',
+    'chi-delayed',
+    'beta',
+    'decay-rate',
+    'delayed-nu-fission matrix'
+)
 
 # Maximum number of delayed groups, from src/constants.F90
 MAX_DELAYED_GROUPS = 8
@@ -51,7 +49,7 @@ class MDGXS(MGXS):
     name : str, optional
         Name of the multi-group cross section. Used as a label to identify
         tallies in OpenMC 'tallies.xml' file.
-    delayed_groups : list of int
+    delayed_groups : list of int, optional
         Delayed groups to filter out the xs
     num_polar : Integral, optional
         Number of equi-width polar angle bins for angle discretization;
@@ -74,7 +72,7 @@ class MDGXS(MGXS):
         Domain type for spatial homogenization
     energy_groups : openmc.mgxs.EnergyGroups
         Energy group structure for energy condensation
-    delayed_groups : list of int
+    delayed_groups : list of int, optional
         Delayed groups to filter out the xs
     num_polar : Integral
         Number of equi-width polar angle bins for angle discretization
@@ -250,7 +248,7 @@ class MDGXS(MGXS):
         name : str, optional
             Name of the multi-group cross section. Used as a label to identify
             tallies in OpenMC 'tallies.xml' file. Defaults to the empty string.
-        delayed_groups : list of int
+        delayed_groups : list of int, optional
             Delayed groups to filter out the xs
         num_polar : Integral, optional
             Number of equi-width polar angle bins for angle discretization;
@@ -394,7 +392,7 @@ class MDGXS(MGXS):
                                           nuclides=query_nuclides, value=value)
 
         # Divide by atom number densities for microscopic cross sections
-        if xs_type == 'micro':
+        if xs_type == 'micro' and self._divide_by_density:
             if self.by_nuclide:
                 densities = self.get_nuclide_densities(nuclides)
             else:
@@ -862,7 +860,7 @@ class MDGXS(MGXS):
                 df = df[df['group out'].isin(groups)]
 
         # If user requested micro cross sections, divide out the atom densities
-        if xs_type == 'micro':
+        if xs_type == 'micro' and self._divide_by_density:
             if self.by_nuclide:
                 densities = self.get_nuclide_densities(nuclides)
             else:
@@ -1007,6 +1005,11 @@ class ChiDelayed(MDGXS):
 
     """
 
+    # Store whether or not the number density should be removed for microscopic
+    # values of this data; since this chi data is normalized to 1.0, the 
+    # data should not be divided by the number density 
+    _divide_by_density = False
+
     def __init__(self, domain=None, domain_type=None, energy_groups=None,
                  delayed_groups=None, by_nuclide=False, name='',
                  num_polar=1, num_azimuthal=1):
@@ -1090,7 +1093,6 @@ class ChiDelayed(MDGXS):
         """
 
         return self._get_homogenized_mgxs(other_mgxs, 'delayed-nu-fission-in')
-
 
     def get_slice(self, nuclides=[], groups=[], delayed_groups=[]):
         """Build a sliced ChiDelayed for the specified nuclides and energy
@@ -1320,10 +1322,10 @@ class ChiDelayed(MDGXS):
 
                 # Sum out all nuclides
                 nuclides = self.get_nuclides()
-                delayed_nu_fission_in = delayed_nu_fission_in.summation\
-                                        (nuclides=nuclides)
-                delayed_nu_fission_out = delayed_nu_fission_out.summation\
-                                         (nuclides=nuclides)
+                delayed_nu_fission_in = delayed_nu_fission_in.summation(
+                    nuclides=nuclides)
+                delayed_nu_fission_out = delayed_nu_fission_out.summation(
+                    nuclides=nuclides)
 
                 # Remove coarse energy filter to keep it out of tally arithmetic
                 energy_filter = delayed_nu_fission_in.find_filter(
@@ -1655,6 +1657,11 @@ class Beta(MDGXS):
 
     """
 
+    # Store whether or not the number density should be removed for microscopic
+    # values of this data; since the beta is not a microscopic or macroscopic
+    # quantity, it should not be divided by the number density
+    _divide_by_density = False
+
     def __init__(self, domain=None, domain_type=None, energy_groups=None,
                  delayed_groups=None, by_nuclide=False, name='',
                  num_polar=1, num_azimuthal=1):
@@ -1839,6 +1846,11 @@ class DecayRate(MDGXS):
         The key used to index multi-group cross sections in an HDF5 data store
 
     """
+
+    # Store whether or not the number density should be removed for microscopic
+    # values of this data; since the decay rates are not microscopic or
+    # macroscopic quantities, it should not be divided by the number density.
+    _divide_by_density = False
 
     def __init__(self, domain=None, domain_type=None, energy_groups=None,
                  delayed_groups=None, by_nuclide=False, name='',
@@ -2163,7 +2175,7 @@ class MatrixMDGXS(MDGXS):
                                           nuclides=query_nuclides, value=value)
 
         # Divide by atom number densities for microscopic cross sections
-        if xs_type == 'micro':
+        if xs_type == 'micro' and self._divide_by_density:
             if self.by_nuclide:
                 densities = self.get_nuclide_densities(nuclides)
             else:
@@ -2173,6 +2185,8 @@ class MatrixMDGXS(MDGXS):
 
         # Eliminate the trivial score dimension
         xs = np.squeeze(xs, axis=len(xs.shape) - 1)
+
+        # Eliminate NaNs which may have been produced by dividing by density
         xs = np.nan_to_num(xs)
 
         if in_groups == 'all':

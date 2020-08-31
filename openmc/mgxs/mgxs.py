@@ -1,65 +1,81 @@
 from collections import OrderedDict
-from numbers import Integral
-import warnings
-import os
 import copy
-from abc import ABCMeta
+from numbers import Integral
+import os
+import warnings
 
-import numpy as np
 import h5py
+import numpy as np
 
 import openmc
 import openmc.checkvalue as cv
-from openmc.tallies import ESTIMATOR_TYPES
-from openmc.mgxs import EnergyGroups
+from ..tallies import ESTIMATOR_TYPES
+from . import EnergyGroups
 
 
 # Supported cross section types
-MGXS_TYPES = ['total',
-              'transport',
-              'nu-transport',
-              'absorption',
-              'capture',
-              'fission',
-              'nu-fission',
-              'kappa-fission',
-              'scatter',
-              'nu-scatter',
-              'scatter matrix',
-              'nu-scatter matrix',
-              'multiplicity matrix',
-              'nu-fission matrix',
-              'scatter probability matrix',
-              'consistent scatter matrix',
-              'consistent nu-scatter matrix',
-              'chi',
-              'chi-prompt',
-              'inverse-velocity',
-              'prompt-nu-fission',
-              'prompt-nu-fission matrix']
+MGXS_TYPES = (
+    'total',
+    'transport',
+    'nu-transport',
+    'absorption',
+    'capture',
+    'fission',
+    'nu-fission',
+    'kappa-fission',
+    'scatter',
+    'nu-scatter',
+    'scatter matrix',
+    'nu-scatter matrix',
+    'multiplicity matrix',
+    'nu-fission matrix',
+    'scatter probability matrix',
+    'consistent scatter matrix',
+    'consistent nu-scatter matrix',
+    'chi',
+    'chi-prompt',
+    'inverse-velocity',
+    'prompt-nu-fission',
+    'prompt-nu-fission matrix',
+    'current'
+)
 
 # Supported domain types
-DOMAIN_TYPES = ['cell',
-                'distribcell',
-                'universe',
-                'material',
-                'mesh']
+DOMAIN_TYPES = (
+    'cell',
+    'distribcell',
+    'universe',
+    'material',
+    'mesh'
+)
 
 # Filter types corresponding to each domain
-_DOMAIN_TO_FILTER = {'cell': openmc.CellFilter,
-                     'distribcell': openmc.DistribcellFilter,
-                     'universe': openmc.UniverseFilter,
-                     'material': openmc.MaterialFilter,
-                     'mesh': openmc.MeshFilter}
+_DOMAIN_TO_FILTER = {
+    'cell': openmc.CellFilter,
+    'distribcell': openmc.DistribcellFilter,
+    'universe': openmc.UniverseFilter,
+    'material': openmc.MaterialFilter,
+    'mesh': openmc.MeshFilter
+}
 
 # Supported domain classes
-_DOMAINS = (openmc.Cell,
-            openmc.Universe,
-            openmc.Material,
-            openmc.RegularMesh)
+_DOMAINS = (
+    openmc.Cell,
+    openmc.Universe,
+    openmc.Material,
+    openmc.RegularMesh
+)
 
-# Supported ScatterMatrixXS angular distribution types
-MU_TREATMENTS = ('legendre', 'histogram')
+# Supported ScatterMatrixXS angular distribution types. Note that 'histogram' is
+# defined here and used in mgxs_library.py, but it is not used for the current
+# module
+SCATTER_TABULAR = 'tabular'
+SCATTER_LEGENDRE = 'legendre'
+SCATTER_HISTOGRAM = 'histogram'
+MU_TREATMENTS = (
+    SCATTER_LEGENDRE,
+    SCATTER_HISTOGRAM
+)
 
 # Maximum Legendre order supported by OpenMC
 _MAX_LEGENDRE = 10
@@ -112,7 +128,7 @@ def _df_column_convert_to_bin(df, current_name, new_name, values_to_bin,
     df.rename(columns={current_name: new_name}, inplace=True)
 
 
-class MGXS(metaclass=ABCMeta):
+class MGXS:
     """An abstract multi-group cross section for some energy group structure
     within some spatial domain.
 
@@ -207,6 +223,10 @@ class MGXS(metaclass=ABCMeta):
 
     """
 
+    # Store whether or not the number density should be removed for microscopic
+    # values of this data
+    _divide_by_density = True
+
     def __init__(self, domain=None, domain_type=None,
                  energy_groups=None, by_nuclide=False, name='', num_polar=1,
                  num_azimuthal=1):
@@ -245,37 +265,36 @@ class MGXS(metaclass=ABCMeta):
     def __deepcopy__(self, memo):
         existing = memo.get(id(self))
 
-        # If this is the first time we have tried to copy this object, copy it
-        if existing is None:
-            clone = type(self).__new__(type(self))
-            clone._name = self.name
-            clone._rxn_type = self.rxn_type
-            clone._by_nuclide = self.by_nuclide
-            clone._nuclides = copy.deepcopy(self._nuclides, memo)
-            clone._domain = self.domain
-            clone._domain_type = self.domain_type
-            clone._energy_groups = copy.deepcopy(self.energy_groups, memo)
-            clone._num_polar = self._num_polar
-            clone._num_azimuthal = self._num_azimuthal
-            clone._tally_trigger = copy.deepcopy(self.tally_trigger, memo)
-            clone._rxn_rate_tally = copy.deepcopy(self._rxn_rate_tally, memo)
-            clone._xs_tally = copy.deepcopy(self._xs_tally, memo)
-            clone._sparse = self.sparse
-            clone._loaded_sp = self._loaded_sp
-            clone._derived = self.derived
-            clone._hdf5_key = self._hdf5_key
-
-            clone._tallies = OrderedDict()
-            for tally_type, tally in self.tallies.items():
-                clone.tallies[tally_type] = copy.deepcopy(tally, memo)
-
-            memo[id(self)] = clone
-
-            return clone
-
         # If this object has been copied before, return the first copy made
-        else:
+        if existing is not None:
             return existing
+
+        # If this is the first time we have tried to copy this object, copy it
+        clone = type(self).__new__(type(self))
+        clone._name = self.name
+        clone._rxn_type = self.rxn_type
+        clone._by_nuclide = self.by_nuclide
+        clone._nuclides = copy.deepcopy(self._nuclides, memo)
+        clone._domain = self.domain
+        clone._domain_type = self.domain_type
+        clone._energy_groups = copy.deepcopy(self.energy_groups, memo)
+        clone._num_polar = self._num_polar
+        clone._num_azimuthal = self._num_azimuthal
+        clone._tally_trigger = copy.deepcopy(self.tally_trigger, memo)
+        clone._rxn_rate_tally = copy.deepcopy(self._rxn_rate_tally, memo)
+        clone._xs_tally = copy.deepcopy(self._xs_tally, memo)
+        clone._sparse = self.sparse
+        clone._loaded_sp = self._loaded_sp
+        clone._derived = self.derived
+        clone._hdf5_key = self._hdf5_key
+
+        clone._tallies = OrderedDict()
+        for tally_type, tally in self.tallies.items():
+            clone.tallies[tally_type] = copy.deepcopy(tally, memo)
+
+        memo[id(self)] = clone
+
+        return clone
 
     def _add_angle_filters(self, filters):
         """Add the azimuthal and polar bins to the MGXS filters if needed.
@@ -489,7 +508,8 @@ class MGXS(metaclass=ABCMeta):
                 self._tallies[key] = openmc.Tally(name=self.name)
                 self._tallies[key].scores = [score]
                 self._tallies[key].estimator = estimator
-                self._tallies[key].filters = [domain_filter]
+                if score != 'current':
+                    self._tallies[key].filters = [domain_filter]
 
                 # If a tally trigger was specified, add it to each tally
                 if self.tally_trigger:
@@ -540,7 +560,10 @@ class MGXS(metaclass=ABCMeta):
             domain_type = self.domain_type[4:-1]
         else:
             domain_type = self.domain_type
-        filter_type = _DOMAIN_TO_FILTER[domain_type]
+        if self._rxn_type == 'current':
+            filter_type = openmc.MeshSurfaceFilter
+        else:
+            filter_type = _DOMAIN_TO_FILTER[domain_type]
         domain_filter = self.xs_tally.find_filter(filter_type)
         return domain_filter.num_bins
 
@@ -673,7 +696,7 @@ class MGXS(metaclass=ABCMeta):
 
         Parameters
         ----------
-        mgxs_type : {'total', 'transport', 'nu-transport', 'absorption', 'capture', 'fission', 'nu-fission', 'kappa-fission', 'scatter', 'nu-scatter', 'scatter matrix', 'nu-scatter matrix', 'multiplicity matrix', 'nu-fission matrix', 'chi', 'chi-prompt', 'inverse-velocity', 'prompt-nu-fission', 'prompt-nu-fission matrix'}
+        mgxs_type : {'total', 'transport', 'nu-transport', 'absorption', 'capture', 'fission', 'nu-fission', 'kappa-fission', 'scatter', 'nu-scatter', 'scatter matrix', 'nu-scatter matrix', 'multiplicity matrix', 'nu-fission matrix', 'chi', 'chi-prompt', 'inverse-velocity', 'prompt-nu-fission', 'prompt-nu-fission matrix', 'current'}
             The type of multi-group cross section object to return
         domain : openmc.Material or openmc.Cell or openmc.Universe or openmc.RegularMesh
             The domain for spatial homogenization
@@ -751,6 +774,8 @@ class MGXS(metaclass=ABCMeta):
         elif mgxs_type == 'prompt-nu-fission matrix':
             mgxs = NuFissionMatrixXS(domain, domain_type, energy_groups,
                                      prompt=True)
+        elif mgxs_type == 'current':
+            mgxs = Current(domain, domain_type, energy_groups)
 
         mgxs.by_nuclide = by_nuclide
         mgxs.name = name
@@ -1067,7 +1092,7 @@ class MGXS(metaclass=ABCMeta):
                                           nuclides=query_nuclides, value=value)
 
         # Divide by atom number densities for microscopic cross sections
-        if xs_type == 'micro':
+        if xs_type == 'micro' and self._divide_by_density:
             if self.by_nuclide:
                 densities = self.get_nuclide_densities(nuclides)
             else:
@@ -1924,7 +1949,7 @@ class MGXS(metaclass=ABCMeta):
                 df = df[df['group out'].isin(groups)]
 
         # If user requested micro cross sections, divide out the atom densities
-        if xs_type == 'micro':
+        if xs_type == 'micro' and self._divide_by_density:
             if self.by_nuclide:
                 densities = self.get_nuclide_densities(nuclides)
             else:
@@ -2087,10 +2112,9 @@ class MatrixMGXS(MGXS):
 
         return self._add_angle_filters(filters)
 
-    def get_xs(self, in_groups='all', out_groups='all',
-               subdomains='all', nuclides='all',
-               xs_type='macro', order_groups='increasing',
-               row_column='inout', value='mean', squeeze=True, **kwargs):
+    def get_xs(self, in_groups='all', out_groups='all', subdomains='all',
+               nuclides='all', xs_type='macro', order_groups='increasing',
+               row_column='inout', value='mean', squeeze=True,  **kwargs):
         """Returns an array of multi-group cross sections.
 
         This method constructs a 4D NumPy array for the requested
@@ -2170,6 +2194,7 @@ class MatrixMGXS(MGXS):
         if not isinstance(in_groups, str):
             cv.check_iterable_type('groups', in_groups, Integral)
             filters.append(openmc.EnergyFilter)
+            energy_bins = []
             for group in in_groups:
                 energy_bins.append((self.energy_groups.get_group_bounds(group),))
             filter_bins.append(tuple(energy_bins))
@@ -2202,7 +2227,7 @@ class MatrixMGXS(MGXS):
                                           nuclides=query_nuclides, value=value)
 
         # Divide by atom number densities for microscopic cross sections
-        if xs_type == 'micro':
+        if xs_type == 'micro' and self._divide_by_density:
             if self.by_nuclide:
                 densities = self.get_nuclide_densities(nuclides)
             else:
@@ -3725,7 +3750,7 @@ class ScatterMatrixXS(MatrixMGXS):
                          num_polar, num_azimuthal)
         self._formulation = 'simple'
         self._correction = 'P0'
-        self._scatter_format = 'legendre'
+        self._scatter_format = SCATTER_LEGENDRE
         self._legendre_order = 0
         self._histogram_bins = 16
         self._estimator = 'analog'
@@ -3748,12 +3773,12 @@ class ScatterMatrixXS(MatrixMGXS):
         process
         """
         if self.num_polar > 1 or self.num_azimuthal > 1:
-            if self.scatter_format == 'histogram':
+            if self.scatter_format == SCATTER_HISTOGRAM:
                 return (0, 1, 3, 4, 5)
             else:
                 return (0, 1, 3, 4)
         else:
-            if self.scatter_format == 'histogram':
+            if self.scatter_format == SCATTER_HISTOGRAM:
                 return (1, 2, 3)
             else:
                 return (1, 2)
@@ -3857,13 +3882,13 @@ class ScatterMatrixXS(MatrixMGXS):
             energy = openmc.EnergyFilter(group_edges)
             energyout = openmc.EnergyoutFilter(group_edges)
 
-            if self.scatter_format == 'legendre':
+            if self.scatter_format == SCATTER_LEGENDRE:
                 if self.correction == 'P0' and self.legendre_order == 0:
                     angle_filter = openmc.LegendreFilter(order=1)
                 else:
                     angle_filter = \
                         openmc.LegendreFilter(order=self.legendre_order)
-            elif self.scatter_format == 'histogram':
+            elif self.scatter_format == SCATTER_HISTOGRAM:
                 bins = np.linspace(-1., 1., num=self.histogram_bins + 1,
                                    endpoint=True)
                 angle_filter = openmc.MuFilter(bins)
@@ -3878,9 +3903,9 @@ class ScatterMatrixXS(MatrixMGXS):
             filters = [[energy], [energy]]
 
             # Group-to-group scattering probability matrix
-            if self.scatter_format == 'legendre':
+            if self.scatter_format == SCATTER_LEGENDRE:
                 angle_filter = openmc.LegendreFilter(order=self.legendre_order)
-            elif self.scatter_format == 'histogram':
+            elif self.scatter_format == SCATTER_HISTOGRAM:
                 bins = np.linspace(-1., 1., num=self.histogram_bins + 1,
                                    endpoint=True)
                 angle_filter = openmc.MuFilter(bins)
@@ -3903,7 +3928,7 @@ class ScatterMatrixXS(MatrixMGXS):
         if self._rxn_rate_tally is None:
 
             if self.formulation == 'simple':
-                if self.scatter_format == 'legendre':
+                if self.scatter_format == SCATTER_LEGENDRE:
                     # If using P0 correction subtract P1 scatter from the diag.
                     if self.correction == 'P0' and self.legendre_order == 0:
                         scatter_p0 = self.tallies[self.rxn_type].get_slice(
@@ -3937,7 +3962,7 @@ class ScatterMatrixXS(MatrixMGXS):
                     # Otherwise, extract scattering moment reaction rate Tally
                     else:
                         self._rxn_rate_tally = self.tallies[self.rxn_type]
-                elif self.scatter_format == 'histogram':
+                elif self.scatter_format == SCATTER_HISTOGRAM:
                     # Extract scattering rate distribution tally
                     self._rxn_rate_tally = self.tallies[self.rxn_type]
 
@@ -3967,14 +3992,14 @@ class ScatterMatrixXS(MatrixMGXS):
                 tally_key = 'scatter matrix'
 
                 # Compute normalization factor summed across outgoing energies
-                if self.scatter_format == 'legendre':
+                if self.scatter_format == SCATTER_LEGENDRE:
                     norm = self.tallies[tally_key].get_slice(
                         scores=['scatter'],
                         filters=[openmc.LegendreFilter],
                         filter_bins=[('P0',)], squeeze=True)
 
                 # Compute normalization factor summed across outgoing mu bins
-                elif self.scatter_format == 'histogram':
+                elif self.scatter_format == SCATTER_HISTOGRAM:
                     norm = self.tallies[tally_key].get_slice(
                         scores=['scatter'])
                     norm = norm.summation(
@@ -3994,14 +4019,14 @@ class ScatterMatrixXS(MatrixMGXS):
                 if self.nu:
                     numer = self.tallies['nu-scatter']
                     # Get the denominator
-                    if self.scatter_format == 'legendre':
+                    if self.scatter_format == SCATTER_LEGENDRE:
                         denom = self.tallies[tally_key].get_slice(
                             scores=['scatter'],
                             filters=[openmc.LegendreFilter],
                             filter_bins=[('P0',)], squeeze=True)
 
                     # Compute normalization factor summed across mu bins
-                    elif self.scatter_format == 'histogram':
+                    elif self.scatter_format == SCATTER_HISTOGRAM:
                         denom = self.tallies[tally_key].get_slice(
                             scores=['scatter'])
 
@@ -4048,7 +4073,7 @@ class ScatterMatrixXS(MatrixMGXS):
                 self._compute_xs()
 
                 # Force the angle filter to be the last filter
-                if self.scatter_format == 'histogram':
+                if self.scatter_format == SCATTER_HISTOGRAM:
                     angle_filter = self._xs_tally.find_filter(openmc.MuFilter)
                 else:
                     angle_filter = \
@@ -4105,13 +4130,13 @@ class ScatterMatrixXS(MatrixMGXS):
     def correction(self, correction):
         cv.check_value('correction', correction, ('P0', None))
 
-        if self.scatter_format == 'legendre':
+        if self.scatter_format == SCATTER_LEGENDRE:
             if correction == 'P0' and self.legendre_order > 0:
                 msg = 'The P0 correction will be ignored since the ' \
                       'scattering order {} is greater than '\
                       'zero'.format(self.legendre_order)
                 warnings.warn(msg)
-        elif self.scatter_format == 'histogram':
+        elif self.scatter_format == SCATTER_HISTOGRAM:
             msg = 'The P0 correction will be ignored since the ' \
                   'scatter format is set to histogram'
             warnings.warn(msg)
@@ -4131,14 +4156,14 @@ class ScatterMatrixXS(MatrixMGXS):
         cv.check_less_than('legendre_order', legendre_order, _MAX_LEGENDRE,
                            equality=True)
 
-        if self.scatter_format == 'legendre':
+        if self.scatter_format == SCATTER_LEGENDRE:
             if self.correction == 'P0' and legendre_order > 0:
                 msg = 'The P0 correction will be ignored since the ' \
                       'scattering order {} is greater than '\
-                      'zero'.format(self.legendre_order)
+                      'zero'.format(legendre_order)
                 warnings.warn(msg, RuntimeWarning)
                 self.correction = None
-        elif self.scatter_format == 'histogram':
+        elif self.scatter_format == SCATTER_HISTOGRAM:
             msg = 'The legendre order will be ignored since the ' \
                   'scatter format is set to histogram'
             warnings.warn(msg)
@@ -4226,7 +4251,7 @@ class ScatterMatrixXS(MatrixMGXS):
         slice_xs._xs_tally = None
 
         # Slice the Legendre order if needed
-        if legendre_order != 'same' and self.scatter_format == 'legendre':
+        if legendre_order != 'same' and self.scatter_format == SCATTER_LEGENDRE:
             cv.check_type('legendre_order', legendre_order, Integral)
             cv.check_less_than('legendre_order', legendre_order,
                                self.legendre_order, equality=True)
@@ -4363,7 +4388,7 @@ class ScatterMatrixXS(MatrixMGXS):
                 filter_bins.append((self.energy_groups.get_group_bounds(group),))
 
         # Construct CrossScore for requested scattering moment
-        if self.scatter_format == 'legendre':
+        if self.scatter_format == SCATTER_LEGENDRE:
             if moment != 'all':
                 cv.check_type('moment', moment, Integral)
                 cv.check_greater_than('moment', moment, 0, equality=True)
@@ -4398,7 +4423,7 @@ class ScatterMatrixXS(MatrixMGXS):
                                           nuclides=query_nuclides, value=value)
 
         # Divide by atom number densities for microscopic cross sections
-        if xs_type == 'micro':
+        if xs_type == 'micro' and self._divide_by_density:
             if self.by_nuclide:
                 densities = self.get_nuclide_densities(nuclides)
             else:
@@ -4508,7 +4533,7 @@ class ScatterMatrixXS(MatrixMGXS):
                                           paths=paths)
 
         # If the matrix is P0, remove the legendre column
-        if self.scatter_format == 'legendre' and self.legendre_order == 0:
+        if self.scatter_format == SCATTER_LEGENDRE and self.legendre_order == 0:
             df = df.drop(axis=1, labels=['legendre'])
 
         return df
@@ -4560,7 +4585,7 @@ class ScatterMatrixXS(MatrixMGXS):
 
         cv.check_value('xs_type', xs_type, ['macro', 'micro'])
 
-        if self.correction != 'P0' and self.scatter_format == 'legendre':
+        if self.correction != 'P0' and self.scatter_format == SCATTER_LEGENDRE:
             rxn_type = '{0} (P{1})'.format(self.rxn_type, moment)
         else:
             rxn_type = self.rxn_type
@@ -4648,7 +4673,7 @@ class ScatterMatrixXS(MatrixMGXS):
                     return to_print
 
                 # Set the number of histogram bins
-                if self.scatter_format == 'histogram':
+                if self.scatter_format == SCATTER_HISTOGRAM:
                     num_mu_bins = self.histogram_bins
                 else:
                     num_mu_bins = 0
@@ -4804,6 +4829,12 @@ class MultiplicityMatrixXS(MatrixMGXS):
         The key used to index multi-group cross sections in an HDF5 data store
 
     """
+
+    # Store whether or not the number density should be removed for microscopic
+    # values of this data; since a multiplicity matrix should reflect the
+    # multiplication relative to 1, this class will not divide by density
+    # for microscopic data
+    _divide_by_density = False
 
     def __init__(self, domain=None, domain_type=None, groups=None,
                  by_nuclide=False, name='', num_polar=1, num_azimuthal=1):
@@ -4971,6 +5002,11 @@ class ScatterProbabilityMatrix(MatrixMGXS):
         The key used to index multi-group cross sections in an HDF5 data store
 
     """
+
+    # Store whether or not the number density should be removed for microscopic
+    # values of this data; since this probability matrix is always normalized
+    # to 1.0, this density division is not necessary
+    _divide_by_density = False
 
     def __init__(self, domain=None, domain_type=None, groups=None,
                  by_nuclide=False, name='', num_polar=1, num_azimuthal=1):
@@ -5298,6 +5334,11 @@ class Chi(MGXS):
         The key used to index multi-group cross sections in an HDF5 data store
 
     """
+
+    # Store whether or not the number density should be removed for microscopic
+    # values of this data; since this chi data is normalized to 1.0, the 
+    # data should not be divided by the number density 
+    _divide_by_density = False
 
     def __init__(self, domain=None, domain_type=None, groups=None,
                  prompt=False, by_nuclide=False, name='', num_polar=1,
@@ -5680,62 +5721,6 @@ class Chi(MGXS):
 
         return xs
 
-    def get_pandas_dataframe(self, groups='all', nuclides='all',
-                             xs_type='macro', paths=False):
-        """Build a Pandas DataFrame for the MGXS data.
-
-        This method leverages :meth:`openmc.Tally.get_pandas_dataframe`, but
-        renames the columns with terminology appropriate for cross section data.
-
-        Parameters
-        ----------
-        groups : Iterable of Integral or 'all'
-            Energy groups of interest. Defaults to 'all'.
-        nuclides : Iterable of str or 'all' or 'sum'
-            The nuclides of the cross-sections to include in the dataframe. This
-            may be a list of nuclide name strings (e.g., ['U235', 'U238']).
-            The special string 'all' will include the cross sections for all
-            nuclides in the spatial domain. The special string 'sum' will
-            include the cross sections summed over all nuclides. Defaults to
-            'all'.
-        xs_type: {'macro', 'micro'}
-            Return macro or micro cross section in units of cm^-1 or barns.
-            Defaults to 'macro'.
-        paths : bool, optional
-            Construct columns for distribcell tally filters (default is True).
-            The geometric information in the Summary object is embedded into
-            a Multi-index column with a geometric "path" to each distribcell
-            instance.
-
-        Returns
-        -------
-        pandas.DataFrame
-            A Pandas DataFrame for the cross section data.
-
-        Raises
-        ------
-        ValueError
-            When this method is called before the multi-group cross section is
-            computed from tally data.
-
-        """
-
-        # Build the dataframe using the parent class method
-        df = super().get_pandas_dataframe(groups, nuclides, xs_type, paths=paths)
-
-        # If user requested micro cross sections, multiply by the atom
-        # densities to cancel out division made by the parent class method
-        if xs_type == 'micro':
-            if self.by_nuclide:
-                densities = self.get_nuclide_densities(nuclides)
-            else:
-                densities = self.get_nuclide_densities('sum')
-            tile_factor = int(df.shape[0] / len(densities))
-            df['mean'] *= np.tile(densities, tile_factor)
-            df['std. dev.'] *= np.tile(densities, tile_factor)
-
-        return df
-
     def get_units(self, xs_type='macro'):
         """Returns the units of Chi.
 
@@ -5877,6 +5862,12 @@ class InverseVelocity(MGXS):
 
     """
 
+    # Store whether or not the number density should be removed for microscopic
+    # values of this data; since the inverse velocity does not contain number
+    # density scaling, we should not remove the number density from microscopic
+    # values
+    _divide_by_density = False
+
     def __init__(self, domain=None, domain_type=None, groups=None,
                  by_nuclide=False, name='', num_polar=1, num_azimuthal=1):
         super().__init__(domain, domain_type, groups, by_nuclide, name,
@@ -5907,3 +5898,472 @@ class InverseVelocity(MGXS):
         else:
             raise ValueError('Unable to return the units of InverseVelocity'
                              ' for xs_type other than "macro"')
+
+
+class MeshSurfaceMGXS(MGXS):
+    """An abstract multi-group cross section for some energy group structure
+    on the surfaces of a mesh domain.
+
+    This class can be used for both OpenMC input generation and tally data
+    post-processing to compute surface- and energy-integrated multi-group cross
+    sections for multi-group neutronics calculations.
+
+    .. note:: Users should instantiate the subclasses of this abstract class.
+
+    Parameters
+    ----------
+    domain : openmc.RegularMesh
+        The domain for spatial homogenization
+    domain_type : {'mesh'}
+        The domain type for spatial homogenization
+    energy_groups : openmc.mgxs.EnergyGroups
+        The energy group structure for energy condensation
+    by_nuclide : bool
+        Unused in MeshSurfaceMGXS
+    name : str, optional
+        Name of the multi-group cross section. Used as a label to identify
+        tallies in OpenMC 'tallies.xml' file.
+
+    Attributes
+    ----------
+    name : str, optional
+        Name of the multi-group cross section
+    rxn_type : str
+        Reaction type (e.g., 'total', 'nu-fission', etc.)
+    by_nuclide : bool
+        Unused in MeshSurfaceMGXS
+    domain : Mesh
+        Domain for spatial homogenization
+    domain_type : {'mesh'}
+        Domain type for spatial homogenization
+    energy_groups : openmc.mgxs.EnergyGroups
+        Energy group structure for energy condensation
+    tally_trigger : openmc.Trigger
+        An (optional) tally precision trigger given to each tally used to
+        compute the cross section
+    scores : list of str
+        The scores in each tally used to compute the multi-group cross section
+    filters : list of openmc.Filter
+        The filters in each tally used to compute the multi-group cross section
+    tally_keys : list of str
+        The keys into the tallies dictionary for each tally used to compute
+        the multi-group cross section
+    estimator : {'analog'}
+        The tally estimator used to compute the multi-group cross section
+    tallies : collections.OrderedDict
+        OpenMC tallies needed to compute the multi-group cross section
+    rxn_rate_tally : openmc.Tally
+        Derived tally for the reaction rate tally used in the numerator to
+        compute the multi-group cross section. This attribute is None
+        unless the multi-group cross section has been computed.
+    xs_tally : openmc.Tally
+        Derived tally for the multi-group cross section. This attribute
+        is None unless the multi-group cross section has been computed.
+    num_subdomains : int
+        The number of subdomains is equal to the number of mesh surfaces times
+        two to account for both the incoming and outgoing current from the
+        mesh cell surfaces.
+    num_nuclides : int
+        Unused in MeshSurfaceMGXS
+    nuclides : Iterable of str or 'sum'
+        Unused in MeshSurfaceMGXS
+    sparse : bool
+        Whether or not the MGXS' tallies use SciPy's LIL sparse matrix format
+        for compressed data storage
+    loaded_sp : bool
+        Whether or not a statepoint file has been loaded with tally data
+    derived : bool
+        Whether or not the MGXS is merged from one or more other MGXS
+    hdf5_key : str
+        The key used to index multi-group cross sections in an HDF5 data store
+    """
+
+    def __init__(self, domain=None, domain_type=None, energy_groups=None,
+                 by_nuclide=False, name=''):
+        super(MeshSurfaceMGXS, self).__init__(domain, domain_type, energy_groups,
+                                          by_nuclide, name)
+        self._estimator = ['analog']
+        self._valid_estimators = ['analog']
+
+    @property
+    def scores(self):
+        return [self.rxn_type]
+
+    @property
+    def domain(self):
+        return self._domain
+
+    @property
+    def domain_type(self):
+        return self._domain_type
+
+    @domain.setter
+    def domain(self, domain):
+        cv.check_type('domain', domain, openmc.RegularMesh)
+        self._domain = domain
+
+        # Assign a domain type
+        if self.domain_type is None:
+            self._domain_type = 'mesh'
+
+    @domain_type.setter
+    def domain_type(self, domain_type):
+        cv.check_value('domain type', domain_type, 'mesh')
+        self._domain_type = domain_type
+
+    @property
+    def filters(self):
+        group_edges = self.energy_groups.group_edges
+        energy_filter = openmc.EnergyFilter(group_edges)
+        mesh = _DOMAIN_TO_FILTER[self.domain_type](self.domain).mesh
+        meshsurface_filter = openmc.MeshSurfaceFilter(mesh)
+        filters = [[meshsurface_filter, energy_filter]]
+
+        return self._add_angle_filters(filters)
+
+    @property
+    def xs_tally(self):
+        if self._xs_tally is None:
+            if self.tallies is None:
+                msg = 'Unable to get xs_tally since tallies have ' \
+                      'not been loaded from a statepoint'
+                raise ValueError(msg)
+
+            self._xs_tally = self.rxn_rate_tally
+            self._compute_xs()
+
+        return self._xs_tally
+
+    def load_from_statepoint(self, statepoint):
+        """Extracts tallies in an OpenMC StatePoint with the data needed to
+        compute multi-group cross sections.
+
+        This method is needed to compute cross section data from tallies
+        in an OpenMC StatePoint object.
+
+        .. note:: The statepoint must first be linked with a :class:`openmc.Summary`
+                  object.
+
+        Parameters
+        ----------
+        statepoint : openmc.StatePoint
+            An OpenMC StatePoint object with tally data
+        Raises
+        ------
+        ValueError
+            When this method is called with a statepoint that has not been
+            linked with a summary object.
+        """
+
+        cv.check_type('statepoint', statepoint, openmc.statepoint.StatePoint)
+
+        if statepoint.summary is None:
+            msg = 'Unable to load data from a statepoint which has not been ' \
+                  'linked with a summary file'
+            raise ValueError(msg)
+
+        filters= []
+        filter_bins = []
+
+        # Clear any tallies previously loaded from a statepoint
+        if self.loaded_sp:
+            self._tallies = None
+            self._xs_tally = None
+            self._rxn_rate_tally = None
+            self._loaded_sp = False
+
+        # Find, slice and store Tallies from StatePoint
+        # The tally slicing is needed if tally merging was used
+        for tally_type, tally in self.tallies.items():
+            sp_tally = statepoint.get_tally(
+                tally.scores, tally.filters, tally.nuclides,
+                estimator=tally.estimator, exact_filters=True)
+            sp_tally = sp_tally.get_slice(
+                tally.scores, filters, filter_bins, tally.nuclides)
+            sp_tally.sparse = self.sparse
+            self.tallies[tally_type] = sp_tally
+
+        self._loaded_sp = True
+
+    def get_xs(self, groups='all', subdomains='all', nuclides='all',
+               xs_type='macro', order_groups='increasing',
+               value='mean', squeeze=True, **kwargs):
+        r"""Returns an array of multi-group cross sections.
+
+        This method constructs a 3D NumPy array for the requested
+        multi-group cross section data for one or more subdomains
+        (1st dimension), energy groups (2nd dimension), and nuclides
+        (3rd dimension).
+
+        Parameters
+        ----------
+        groups : Iterable of Integral or 'all'
+            Energy groups of interest. Defaults to 'all'.
+        subdomains : Iterable of Integral or 'all'
+            Subdomain IDs of interest. Defaults to 'all'.
+        nuclides : Iterable of str or 'all' or 'sum'
+            Unused in MeshSurfaceMGXS, its value will be ignored. The nuclides
+            dimension of the resultant array will always have a length of 1.
+        xs_type: {'macro'}
+            The 'macro'/'micro' distinction does not apply to MeshSurfaceMGXS.
+            The calculation of a 'micro' xs_type is omited in this class.
+        order_groups: {'increasing', 'decreasing'}
+            Return the cross section indexed according to increasing or
+            decreasing energy groups (decreasing or increasing energies).
+            Defaults to 'increasing'.
+        value : {'mean', 'std_dev', 'rel_err'}
+            A string for the type of value to return. Defaults to 'mean'.
+        squeeze : bool
+            A boolean representing whether to eliminate the extra dimensions
+            of the multi-dimensional array to be returned. Defaults to True.
+        Returns
+        -------
+        numpy.ndarray
+            A NumPy array of the multi-group cross section indexed in the order
+            each group, subdomain and nuclide is listed in the parameters.
+        Raises
+        ------
+        ValueError
+            When this method is called before the multi-group cross section is
+            computed from tally data.
+        """
+
+        cv.check_value('value', value, ['mean', 'std_dev', 'rel_err'])
+        cv.check_value('xs_type', xs_type, ['macro'])
+
+        filters = []
+        filter_bins = []
+
+        # Construct a collection of the domain filter bins
+        if not isinstance(subdomains, str):
+            cv.check_iterable_type('subdomains', subdomains, Integral,
+                                   max_depth=3)
+
+            filters.append(_DOMAIN_TO_FILTER[self.domain_type])
+            subdomain_bins = []
+            for subdomain in subdomains:
+                subdomain_bins.append(subdomain)
+            filter_bins.append(tuple(subdomain_bins))
+
+        xs = self.xs_tally.get_values(filters=filters,
+                filter_bins=filter_bins, value=value)
+
+        # Construct list of energy group bounds tuples for all requested groups
+        if not isinstance(groups, str):
+            cv.check_iterable_type('groups', groups, Integral)
+            filters.append(openmc.EnergyFilter)
+            energy_bins = []
+            for group in groups:
+                energy_bins.append(
+                    (self.energy_groups.get_group_bounds(group),))
+            filter_bins.append(tuple(energy_bins))
+
+        # Eliminate the trivial score dimension
+        xs = np.squeeze(xs, axis=len(xs.shape) - 1)
+        xs = np.nan_to_num(xs)
+
+        if groups == 'all':
+            num_groups = self.num_groups
+        else:
+            num_groups = len(groups)
+
+        # Reshape tally data array with separate axes for domain and energy
+        # Accomodate the polar and azimuthal bins if needed
+        num_surfaces = 4 * self.domain.n_dimension
+        num_subdomains = int(xs.shape[0] / (num_groups * self.num_polar *
+                                            self.num_azimuthal * num_surfaces))
+        if self.num_polar > 1 or self.num_azimuthal > 1:
+            new_shape = (self.num_polar, self.num_azimuthal, num_subdomains,
+                         num_groups, num_surfaces)
+        else:
+            new_shape = (num_subdomains, num_groups, num_surfaces)
+        new_shape += xs.shape[1:]
+        new_xs = np.zeros(new_shape)
+        for cell in range(num_subdomains):
+            for g in range(num_groups):
+                for s in range(num_surfaces):
+                    new_xs[cell,g,s] = \
+                            xs[cell*num_surfaces*num_groups+s*num_groups+g]
+        xs = new_xs
+
+        # Reverse data if user requested increasing energy groups since
+        # tally data is stored in order of increasing energies
+        if order_groups == 'increasing':
+            xs = xs[..., ::-1, :, :]
+
+        if squeeze:
+            # We want to squeeze out everything but the polar, azimuthal,
+            # and energy group data.
+            xs = self._squeeze_xs(xs)
+
+        return xs
+
+    def get_pandas_dataframe(self, groups='all', nuclides='all',
+                             xs_type='macro', paths=True):
+        """Build a Pandas DataFrame for the MGXS data.
+
+        This method leverages :meth:`openmc.Tally.get_pandas_dataframe`, but
+        renames the columns with terminology appropriate for cross section data.
+
+        Parameters
+        ----------
+        groups : Iterable of Integral or 'all'
+            Energy groups of interest. Defaults to 'all'.
+        nuclides : Iterable of str or 'all' or 'sum'
+            Unused in MeshSurfaceMGXS, its value will be ignored. The nuclides
+            dimension of the resultant array will always have a length of 1.
+        xs_type: {'macro'}
+            'micro' unused in MeshSurfaceMGXS.
+        paths : bool, optional
+            Construct columns for distribcell tally filters (default is True).
+            The geometric information in the Summary object is embedded into
+            a Multi-index column with a geometric "path" to each distribcell
+            instance.
+
+        Returns
+        -------
+        pandas.DataFrame
+            A Pandas DataFrame for the cross section data.
+
+        Raises
+        ------
+        ValueError
+            When this method is called before the multi-group cross section is
+            computed from tally data.
+        """
+
+        if not isinstance(groups, str):
+            cv.check_iterable_type('groups', groups, Integral)
+        cv.check_value('xs_type', xs_type, ['macro'])
+
+        df = self.xs_tally.get_pandas_dataframe(paths=paths)
+
+        # Remove the score column since it is homogeneous and redundant
+        df = df.drop('score', axis=1, level=0)
+
+        # Convert azimuthal, polar, energy in and energy out bin values in to
+        # bin indices
+        columns = self._df_convert_columns_to_bins(df)
+
+        # Select out those groups the user requested
+        if not isinstance(groups, str):
+            if 'group in' in df:
+                df = df[df['group in'].isin(groups)]
+            if 'group out' in df:
+                df = df[df['group out'].isin(groups)]
+
+        mesh_str = 'mesh {0}'.format(self.domain.id)
+        col_key = (mesh_str, 'surf')
+        surfaces = df.pop(col_key)
+        df.insert(len(self.domain.dimension), col_key, surfaces)
+        if len(self.domain.dimension) == 1:
+            df.sort_values(by=[(mesh_str, 'x'), (mesh_str, 'surf')] 
+                    + columns, inplace=True)
+        elif len(self.domain.dimension) == 2:
+            df.sort_values(by=[(mesh_str, 'x'), (mesh_str, 'y'),
+                (mesh_str, 'surf')] + columns, inplace=True)
+        elif len(self.domain.dimension) == 3:
+            df.sort_values(by=[(mesh_str, 'x'), (mesh_str, 'y'),
+                (mesh_str, 'z'), (mesh_str, 'surf')] + columns, inplace=True)
+
+        return df
+
+
+class Current(MeshSurfaceMGXS):
+    r"""A current multi-group cross section.
+
+    This class can be used for both OpenMC input generation and tally data
+    post-processing to compute surface- and energy-integrated
+    multi-group current cross sections for multi-group neutronics calculations. At
+    a minimum, one needs to set the :attr:`Current.energy_groups` and
+    :attr:`Current.domain` properties. Tallies for the appropriate
+    reaction rates over the specified domain are generated automatically via the
+    :attr:`Current.tallies` property, which can then be appended to a
+    :class:`openmc.Tallies` instance.
+
+    For post-processing, the :meth:`MGXS.load_from_statepoint` will pull in the
+    necessary data to compute multi-group cross sections from a
+    :class:`openmc.StatePoint` instance. The derived multi-group cross section
+    can then be obtained from the :attr:`Current.xs_tally` property.
+    For a spatial domain :math:`S` and energy group :math:`[E_g,E_{g-1}]`, the
+    total cross section is calculated as:
+
+    .. math::
+       \frac{\int_{r \in S} dS \int_{E_g}^{E_{g-1}} dE \;
+       J(r, E)}{\int_{r \in S} dS \int_{E_g}^{E_{g-1}} dE}.
+
+    Parameters
+    ----------
+    domain : openmc.RegularMesh
+        The domain for spatial homogenization
+    domain_type : ('mesh'}
+        The domain type for spatial homogenization
+    groups : openmc.mgxs.EnergyGroups
+        The energy group structure for energy condensation
+    by_nuclide : bool
+        Unused in MeshSurfaceMGXS
+    name : str, optional
+        Name of the multi-group cross section. Used as a label to identify
+        tallies in OpenMC 'tallies.xml' file.
+
+    Attributes
+    ----------
+    name : str, optional
+        Name of the multi-group cross section
+    rxn_type : str
+        Reaction type (e.g., 'total', 'nu-fission', etc.)
+    by_nuclide : bool
+        Unused in MeshSurfaceMGXS
+    domain : openmc.RegularMesh
+        Domain for spatial homogenization
+    domain_type : {'mesh'}
+        Domain type for spatial homogenization
+    energy_groups : openmc.mgxs.EnergyGroups
+        Energy group structure for energy condensation
+    tally_trigger : openmc.Trigger
+        An (optional) tally precision trigger given to each tally used to
+        compute the cross section
+    scores : list of str
+        The scores in each tally used to compute the multi-group cross section
+    filters : list of openmc.Filter
+        The filters in each tally used to compute the multi-group cross section
+    tally_keys : list of str
+        The keys into the tallies dictionary for each tally used to compute
+        the multi-group cross section
+    estimator : {'analog'}
+        The tally estimator used to compute the multi-group cross section
+    tallies : collections.OrderedDict
+        OpenMC tallies needed to compute the multi-group cross section. The keys
+        are strings listed in the :attr:`TotalXS.tally_keys` property and values
+        are instances of :class:`openmc.Tally`.
+    rxn_rate_tally : openmc.Tally
+        Derived tally for the reaction rate tally used in the numerator to
+        compute the multi-group cross section. This attribute is None
+        unless the multi-group cross section has been computed.
+    xs_tally : openmc.Tally
+        Derived tally for the multi-group cross section. This attribute
+        is None unless the multi-group cross section has been computed.
+    num_subdomains : int
+        The number of subdomains is equal to the number of mesh surfaces times
+        two to account for both the incoming and outgoing current from the 
+        mesh cell surfaces.
+    num_nuclides : int
+        Unused in MeshSurfaceMGXS
+    nuclides : Iterable of str or 'sum'
+        Unused in MeshSurfaceMGXS
+    sparse : bool
+        Whether or not the MGXS' tallies use SciPy's LIL sparse matrix format
+        for compressed data storage
+    loaded_sp : bool
+        Whether or not a statepoint file has been loaded with tally data
+    derived : bool
+        Whether or not the MGXS is merged from one or more other MGXS
+    hdf5_key : str
+        The key used to index multi-group cross sections in an HDF5 data store
+    """
+
+    def __init__(self, domain=None, domain_type=None,
+                 groups=None, by_nuclide=False, name=''):
+        super(Current, self).__init__(domain, domain_type,
+                                      groups, by_nuclide, name)
+        self._rxn_type = 'current'

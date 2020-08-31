@@ -5,9 +5,11 @@
 #include "openmc/hdf5_interface.h"
 #include "openmc/math_functions.h"
 #include "openmc/nuclide.h"
+#include "openmc/error.h"  // for writing messages
+
+#include <fmt/core.h>
 
 #include <cmath>
-#include <sstream>
 
 namespace openmc {
 
@@ -201,15 +203,14 @@ void check_wmp_version(hid_t file)
     std::array<int, 2> version;
     read_attribute(file, "version", version);
     if (version[0] != WMP_VERSION[0]) {
-      std::stringstream msg;
-      msg << "WMP data format uses version " << version[0] << "." <<
-        version[1] << " whereas your installation of OpenMC expects version "
-        << WMP_VERSION[0] << ".x data.";
-      fatal_error(msg);
+      fatal_error(fmt::format(
+        "WMP data format uses version {}.{} whereas your installation of "
+        "OpenMC expects version {}.x data.",
+        version[0], version[1], WMP_VERSION[0]));
     }
   } else {
-    fatal_error("WMP data does not indicate a version. Your installation of "
-      "OpenMC expects version " + std::to_string(WMP_VERSION[0]) + ".x data.");
+    fatal_error(fmt::format("WMP data does not indicate a version. Your "
+      "installation of OpenMC expects version {}x data.", WMP_VERSION[0]));
   }
 }
 
@@ -227,7 +228,7 @@ void read_multipole_data(int i_nuclide)
   std::string& filename = data::libraries[idx].path_;
 
   // Display message
-  write_message("Reading " + nuc->name_ + " WMP data from " + filename, 6);
+  write_message(6, "Reading {} WMP data from {}", nuc->name_, filename);
 
   // Open file and make sure version is sufficient
   hid_t file = file_open(filename, 'r');

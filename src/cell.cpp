@@ -5,9 +5,11 @@
 #include <cctype>
 #include <cmath>
 #include <iterator>
-#include <sstream>
 #include <set>
+#include <sstream>
 #include <string>
+
+#include <fmt/core.h>
 #include <gsl/gsl>
 
 #include "openmc/capi.h"
@@ -30,11 +32,11 @@ namespace openmc {
 //==============================================================================
 
 namespace model {
-  std::vector<std::unique_ptr<Cell>> cells;
   std::unordered_map<int32_t, int32_t> cell_map;
+  std::vector<std::unique_ptr<Cell>> cells;
 
-  std::vector<std::unique_ptr<Universe>> universes;
   std::unordered_map<int32_t, int32_t> universe_map;
+  std::vector<std::unique_ptr<Universe>> universes;
 } // namespace model
 
 //==============================================================================
@@ -83,9 +85,8 @@ tokenize(const std::string region_spec) {
       i++;
 
     } else {
-      std::stringstream err_msg;
-      err_msg << "Region specification contains invalid character, \""
-              << region_spec[i] << "\"";
+      auto err_msg = fmt::format(
+        "Region specification contains invalid character, \"{}\"", region_spec[i]);
       fatal_error(err_msg);
     }
   }
@@ -156,10 +157,8 @@ generate_rpn(int32_t cell_id, std::vector<int32_t> infix)
         // If we run out of operators without finding a left parenthesis, it
         // means there are mismatched parentheses.
         if (it == stack.rend()) {
-          std::stringstream err_msg;
-          err_msg << "Mismatched parentheses in region specification for cell "
-                  << cell_id;
-          fatal_error(err_msg);
+          fatal_error(fmt::format(
+            "Mismatched parentheses in region specification for cell {}", cell_id));
         }
         rpn.push_back(stack.back());
         stack.pop_back();
@@ -175,10 +174,8 @@ generate_rpn(int32_t cell_id, std::vector<int32_t> infix)
 
     // If the operator is a parenthesis it is mismatched.
     if (op >= OP_RIGHT_PAREN) {
-      std::stringstream err_msg;
-      err_msg << "Mismatched parentheses in region specification for cell "
-              << cell_id;
-      fatal_error(err_msg);
+      fatal_error(fmt::format(
+        "Mismatched parentheses in region specification for cell {}", cell_id));
     }
 
     rpn.push_back(stack.back());
@@ -196,9 +193,7 @@ void
 Universe::to_hdf5(hid_t universes_group) const
 {
   // Create a group for this universe.
-  std::stringstream group_name;
-  group_name << "universe " << id_;
-  auto group = create_group(universes_group, group_name);
+  auto group = create_group(universes_group, fmt::format("universe {}", id_));
 
   // Write the contained cells.
   if (cells_.size() > 0) {
@@ -245,7 +240,7 @@ Cell::temperature(int32_t instance) const
 }
 
 void
-Cell::set_temperature(double T, int32_t instance)
+Cell::set_temperature(double T, int32_t instance, bool set_contained)
 {
   if (settings::temperature_method == TemperatureMethod::INTERPOLATION) {
     if (T < data::temperature_min) {
@@ -257,16 +252,33 @@ Cell::set_temperature(double T, int32_t instance)
     }
   }
 
-  if (instance >= 0) {
-    // If temperature vector is not big enough, resize it first
-    if (sqrtkT_.size() != n_instances_) sqrtkT_.resize(n_instances_, sqrtkT_[0]);
+  if (type_ == Fill::MATERIAL) {
+    if (instance >= 0) {
+      // If temperature vector is not big enough, resize it first
+      if (sqrtkT_.size() != n_instances_) sqrtkT_.resize(n_instances_, sqrtkT_[0]);
 
-    // Set temperature for the corresponding instance
-    sqrtkT_.at(instance) = std::sqrt(K_BOLTZMANN * T);
+      // Set temperature for the corresponding instance
+      sqrtkT_.at(instance) = std::sqrt(K_BOLTZMANN * T);
+    } else {
+      // Set temperature for all instances
+      for (auto& T_ : sqrtkT_) {
+        T_ = std::sqrt(K_BOLTZMANN * T);
+      }
+    }
   } else {
-    // Set temperature for all instances
-    for (auto& T_ : sqrtkT_) {
-      T_ = std::sqrt(K_BOLTZMANN * T);
+    if (!set_contained) {
+      throw std::runtime_error{fmt::format("Attempted to set the temperature of cell {} "
+                                           "which is not filled by a material.", id_)};
+    }
+
+    auto contained_cells = this->get_contained_cells();
+    for (const auto& entry : contained_cells) {
+      auto& cell = model::cells[entry.first];
+      Expects(cell->type_ == Fill::MATERIAL);
+      auto& instances =  entry.second;
+      for (auto instance : instances) {
+        cell->set_temperature(T, instance);
+      }
     }
   }
 }
@@ -299,22 +311,19 @@ CSGCell::CSGCell(pugi::xml_node cell_node)
   bool fill_present = check_for_node(cell_node, "fill");
   bool material_present = check_for_node(cell_node, "material");
   if (!(fill_present || material_present)) {
-    std::stringstream err_msg;
-    err_msg << "Neither material nor fill was specified for cell " << id_;
-    fatal_error(err_msg);
+    fatal_error(fmt::format(
+      "Neither material nor fill was specified for cell {}", id_));
   }
   if (fill_present && material_present) {
-    std::stringstream err_msg;
-    err_msg << "Cell " << id_ << " has both a material and a fill specified; "
-            << "only one can be specified per cell";
-    fatal_error(err_msg);
+    fatal_error(fmt::format("Cell {} has both a material and a fill specified; "
+      "only one can be specified per cell", id_));
   }
 
   if (fill_present) {
     fill_ = std::stoi(get_node_value(cell_node, "fill"));
     if (fill_ == universe_) {
-      fatal_error("Cell " + std::to_string(id_) +
-        " is filled with the same universe that it is contained in.");
+      fatal_error(fmt::format("Cell {} is filled with the same universe that"
+        "it is contained in.", id_));
     }
   } else {
     fill_ = C_NONE;
@@ -336,9 +345,8 @@ CSGCell::CSGCell(pugi::xml_node cell_node)
         }
       }
     } else {
-      std::stringstream err_msg;
-      err_msg << "An empty material element was specified for cell " << id_;
-      fatal_error(err_msg);
+      fatal_error(fmt::format("An empty material element was specified for cell {}",
+        id_));
     }
   }
 
@@ -349,20 +357,16 @@ CSGCell::CSGCell(pugi::xml_node cell_node)
 
     // Make sure this is a material-filled cell.
     if (material_.size() == 0) {
-      std::stringstream err_msg;
-      err_msg << "Cell " << id_ << " was specified with a temperature but "
-           "no material. Temperature specification is only valid for cells "
-           "filled with a material.";
-      fatal_error(err_msg);
+      fatal_error(fmt::format(
+        "Cell {} was specified with a temperature but no material. Temperature"
+        "specification is only valid for cells filled with a material.", id_));
     }
 
     // Make sure all temperatures are non-negative.
     for (auto T : sqrtkT_) {
       if (T < 0) {
-        std::stringstream err_msg;
-        err_msg << "Cell " << id_
-                << " was specified with a negative temperature";
-        fatal_error(err_msg);
+        fatal_error(fmt::format(
+          "Cell {} was specified with a negative temperature", id_));
       }
     }
 
@@ -390,7 +394,7 @@ CSGCell::CSGCell(pugi::xml_node cell_node)
         throw std::runtime_error{"Invalid surface ID " + std::to_string(abs(r))
           + " specified in region for cell " + std::to_string(id_) + "."};
       }
-      r = copysign(it->second + 1, r);
+      r = (r > 0) ? it->second + 1 : -(it->second + 1);
     }
   }
 
@@ -424,17 +428,14 @@ CSGCell::CSGCell(pugi::xml_node cell_node)
   // Read the translation vector.
   if (check_for_node(cell_node, "translation")) {
     if (fill_ == C_NONE) {
-      std::stringstream err_msg;
-      err_msg << "Cannot apply a translation to cell " << id_
-              << " because it is not filled with another universe";
-      fatal_error(err_msg);
+      fatal_error(fmt::format("Cannot apply a translation to cell {}"
+        " because it is not filled with another universe", id_));
     }
 
     auto xyz {get_node_array<double>(cell_node, "translation")};
     if (xyz.size() != 3) {
-      std::stringstream err_msg;
-      err_msg << "Non-3D translation vector applied to cell " << id_;
-      fatal_error(err_msg);
+      fatal_error(fmt::format(
+        "Non-3D translation vector applied to cell {}", id_));
     }
     translation_ = xyz;
   }
@@ -442,17 +443,14 @@ CSGCell::CSGCell(pugi::xml_node cell_node)
   // Read the rotation transform.
   if (check_for_node(cell_node, "rotation")) {
     if (fill_ == C_NONE) {
-      std::stringstream err_msg;
-      err_msg << "Cannot apply a rotation to cell " << id_
-              << " because it is not filled with another universe";
-      fatal_error(err_msg);
+      fatal_error(fmt::format("Cannot apply a rotation to cell {}"
+        " because it is not filled with another universe", id_));
     }
 
     auto rot {get_node_array<double>(cell_node, "rotation")};
     if (rot.size() != 3 && rot.size() != 9) {
-      std::stringstream err_msg;
-      err_msg << "Non-3D rotation vector applied to cell " << id_;
-      fatal_error(err_msg);
+      fatal_error(fmt::format(
+        "Non-3D rotation vector applied to cell {}", id_));
     }
 
     // Compute and store the rotation matrix.
@@ -532,9 +530,7 @@ void
 CSGCell::to_hdf5(hid_t cell_group) const
 {
   // Create a group for this cell.
-  std::stringstream group_name;
-  group_name << "cell " << id_;
-  auto group = create_group(cell_group, group_name);
+  auto group = create_group(cell_group, fmt::format("cell {}", id_));
 
   if (!name_.empty()) {
     write_string(group, "name", name_, false);
@@ -557,8 +553,8 @@ CSGCell::to_hdf5(hid_t cell_group) const
         region_spec << " |";
       } else {
         // Note the off-by-one indexing
-        region_spec << " "
-             << copysign(model::surfaces[abs(token)-1]->id_, token);
+        auto surf_id = model::surfaces[abs(token)-1]->id_;
+        region_spec << " " << ((token > 0) ? surf_id : -surf_id);
       }
     }
     write_string(group, "region", region_spec.str(), false);
@@ -783,11 +779,12 @@ CSGCell::contains_complex(Position r, Direction u, int32_t on_surface) const
 // DAGMC Cell implementation
 //==============================================================================
 #ifdef DAGMC
-DAGCell::DAGCell() : Cell{} {};
+DAGCell::DAGCell() : Cell{} { simple_ = true; };
 
 std::pair<double, int32_t>
 DAGCell::distance(Position r, Direction u, int32_t on_surface, Particle* p) const
 {
+  Expects(p);
   // if we've changed direction or we're not on a surface,
   // reset the history and update last direction
   if (u != p->last_dir_ || on_surface == 0) {
@@ -1011,9 +1008,7 @@ void read_cells(pugi::xml_node node)
     if (search == model::cell_map.end()) {
       model::cell_map[id] = i;
     } else {
-      std::stringstream err_msg;
-      err_msg << "Two or more cells use the same unique ID: " << id;
-      fatal_error(err_msg);
+      fatal_error(fmt::format("Two or more cells use the same unique ID: {}", id));
     }
   }
 
@@ -1180,6 +1175,67 @@ openmc_cell_set_name(int32_t index, const char* name) {
   return 0;
 }
 
+
+std::unordered_map<int32_t, std::vector<int32_t>>
+Cell::get_contained_cells() const {
+  std::unordered_map<int32_t, std::vector<int32_t>> contained_cells;
+  std::vector<ParentCell> parent_cells;
+
+  // if this cell is filled w/ a material, it contains no other cells
+  if (type_ != Fill::MATERIAL) {
+    this->get_contained_cells_inner(contained_cells, parent_cells);
+  }
+
+  return contained_cells;
+}
+
+//! Get all cells within this cell
+void
+Cell::get_contained_cells_inner(std::unordered_map<int32_t, std::vector<int32_t>>& contained_cells,
+                                std::vector<ParentCell>& parent_cells) const
+{
+
+  // filled by material, determine instance based on parent cells
+  if (type_ == Fill::MATERIAL) {
+    int instance = 0;
+    if (this->distribcell_index_ >= 0) {
+      for (auto& parent_cell : parent_cells) {
+        auto& cell = openmc::model::cells[parent_cell.cell_index];
+        if (cell->type_ == Fill::UNIVERSE) {
+          instance += cell->offset_[distribcell_index_];
+        } else if (cell->type_ == Fill::LATTICE) {
+          auto& lattice = model::lattices[cell->fill_];
+          instance += lattice->offset(this->distribcell_index_, parent_cell.lattice_index);
+        }
+      }
+    }
+    // add entry to contained cells
+    contained_cells[model::cell_map[id_]].push_back(instance);
+  // filled with universe, add the containing cell to the parent cells
+  // and recurse
+  } else if (type_ == Fill::UNIVERSE) {
+    parent_cells.push_back({model::cell_map[id_], -1});
+    auto& univ = model::universes[fill_];
+    for(auto cell_index : univ->cells_) {
+      auto& cell = model::cells[cell_index];
+      cell->get_contained_cells_inner(contained_cells, parent_cells);
+    }
+    parent_cells.pop_back();
+  // filled with a lattice, visit each universe in the lattice
+  // with a recursive call to collect the cell instances
+  } else if (type_ == Fill::LATTICE) {
+    auto& lattice = model::lattices[fill_];
+    for (auto i = lattice->begin(); i != lattice->end(); ++i) {
+      auto& univ = model::universes[*i];
+      parent_cells.push_back({model::cell_map[id_], i.indx_});
+      for (auto cell_index : univ->cells_) {
+        auto& cell = model::cells[cell_index];
+        cell->get_contained_cells_inner(contained_cells, parent_cells);
+      }
+      parent_cells.pop_back();
+    }
+  }
+}
 
 //! Return the index in the cells array of a cell with a given ID
 extern "C" int
