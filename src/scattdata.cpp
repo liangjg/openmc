@@ -34,18 +34,15 @@ ScattData::base_init(int order, const xt::xtensor<int, 1>& in_gmin,
   for (int gin = 0; gin < groups; gin++) {
     // Store the inputted data
     energy[gin] = in_energy[gin];
-    // energy[gin] = std::abs(in_energy[gin]);
     
     mult[gin] = in_mult[gin];
 
-    std::cout<<"gin="<<gin<<", energy[gin]="<<energy[gin]<<"\n";
     // Make sure the energy is normalized
     double norm = std::accumulate(energy[gin].begin(), energy[gin].end(), 0.);
 
     if (norm != 0.) {
       for (auto& n : energy[gin]) n /= norm;
     }
-    std::cout<<"gin="<<gin<<", energy[gin]="<<energy[gin]<<"\n";
 
     // Initialize the distribution data
     dist[gin].resize(in_gmax[gin] - in_gmin[gin] + 1);
@@ -187,14 +184,6 @@ ScattData::base_combine(size_t max_order,
 void
 ScattData::sample_energy(int gin, int& gout, int& i_gout, uint64_t* seed)
 {
-  // LZY test
-  // std::cout<<"prob_s[0][0]: "<<energy[0][0];
-  // std::cout<<", prob_s[0][1]: "<<energy[0][1];
-  // std::cout<<", prob_s[1][0]: "<<energy[1][0];
-  // std::cout<<", prob_s[1][1]: "<<energy[1][1];
-  
-  // std::cout<<"\n";
-
   // Sample the outgoing group
   double xi = prn(seed);
   double prob = 0.;
@@ -207,7 +196,6 @@ ScattData::sample_energy(int gin, int& gout, int& i_gout, uint64_t* seed)
   }
 
   for (gout = gmin[gin]; gout < gmax[gin]; ++gout) {
-    // prob += energy[gin][i_gout];
     prob += std::abs(energy[gin][i_gout]) / sum_scaled;
     if (xi < prob) break;
     ++i_gout;
@@ -284,16 +272,13 @@ ScattDataLegendre::init(const xt::xtensor<int, 1>& in_gmin,
 
   // Get the scattering cross section value by summing the un-normalized P0
   // coefficient in the variable matrix over all outgoing groups.
-  std::cout<<"Sigma_s: ";
   scattxs = xt::zeros<double>({groups});
   for (int gin = 0; gin < groups; gin++) {
     int num_groups = in_gmax[gin] - in_gmin[gin] + 1;
     for (int i_gout = 0; i_gout < num_groups; i_gout++) {
       scattxs[gin] += matrix[gin][i_gout][0];
-      std::cout<<matrix[gin][i_gout][0]<<", ";
     }
   }
-  std::cout<<"\n";
 
   // Build the energy transfer matrix from data in the variable matrix while
   // also normalizing the variable matrix itself

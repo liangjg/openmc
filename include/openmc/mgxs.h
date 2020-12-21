@@ -105,7 +105,7 @@ class Mgxs {
     bool fissionable;   // Is this fissionable
     std::vector<CacheData> cache; // index and data cache
 
-    std::vector<XsData> xs; // Cross section data
+    std::vector<XsData> xs; // Cross section data (changed from private to public)
 
     Mgxs() = default;
 

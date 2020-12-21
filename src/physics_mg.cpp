@@ -57,25 +57,16 @@ sample_reaction(Particle& p)
     }
   }
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // LZY test
-  // std::cout<<"wgt="<<p.wgt_;
-  // std::cout<<", g="<<(p.g_+1);
-  // std::cout<<", Sigma_t: "<<p.macro_xs_.total;
-  // std::cout<<", Sigma_a: "<<p.macro_xs_.absorption;
-
+  // Read self-scattering cross section
   double sigs_self = data::mg.macro_xs_[p.material_].get_xs(MgxsType::SCATTER, p.g_, &p.g_,
                               &p.mu_, nullptr);
-  // std::cout<<"    sigs_self: "<<sigs_self;
-  // std::cout<<"\n";
 
-  // check if the self-scatter xs is negative
+  // Check if the self-scatter xs is negative
   if (sigs_self < 0.0){
     // adjust the weight to account for sampling with negative xs
     p.wgt_ *= (p.macro_xs_.total - 2 * sigs_self)/ p.macro_xs_.total;
   }
   
-
   // If survival biasing is being used, the following subroutine adjusts the
   // weight of the particle. Otherwise, it checks to see if absorption occurs.
   if (p.macro_xs_.absorption > 0.) {
@@ -105,7 +96,6 @@ scatter(Particle& p)
     double sigs_self = data::mg.macro_xs_[p.material_].get_xs(MgxsType::SCATTER, p.g_last_, &p.g_,
                               &p.mu_, nullptr);
     // check if the self-scatter xs is negative
-    // std::cout<<"    scat-group: "<<(p.g_last_+1)<<" to "<<(p.g_+1)<<", sigs_self="<<sigs_self<<"\n";
     if (sigs_self < 0.0){
       // adjust sigma_tot for sampling with negative xs
       p.wgt_ *= -1.0;
