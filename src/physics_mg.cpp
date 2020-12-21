@@ -19,6 +19,11 @@
 #include "openmc/simulation.h"
 #include "openmc/tallies/tally.h"
 
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+#include "openmc/mgxs.h"
+
 namespace openmc {
 
 void
@@ -52,6 +57,25 @@ sample_reaction(Particle& p)
     }
   }
 
+  ////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  // LZY test
+  // std::cout<<"wgt="<<p.wgt_;
+  // std::cout<<", g="<<(p.g_+1);
+  // std::cout<<", Sigma_t: "<<p.macro_xs_.total;
+  // std::cout<<", Sigma_a: "<<p.macro_xs_.absorption;
+
+  double sigs_self = data::mg.macro_xs_[p.material_].get_xs(MgxsType::SCATTER, p.g_, &p.g_,
+                              &p.mu_, nullptr);
+  // std::cout<<"    sigs_self: "<<sigs_self;
+  // std::cout<<"\n";
+
+  // check if the self-scatter xs is negative
+  if (sigs_self < 0.0){
+    // adjust the weight to account for sampling with negative xs
+    p.wgt_ *= (p.macro_xs_.total - 2 * sigs_self)/ p.macro_xs_.total;
+  }
+  
+
   // If survival biasing is being used, the following subroutine adjusts the
   // weight of the particle. Otherwise, it checks to see if absorption occurs.
   if (p.macro_xs_.absorption > 0.) {
@@ -76,6 +100,17 @@ scatter(Particle& p)
 {
   data::mg.macro_xs_[p.material_].sample_scatter(p.g_last_, p.g_, p.mu_,
                                                   p.wgt_, p.current_seed());
+
+  if (p.g_last_ == p.g_){
+    double sigs_self = data::mg.macro_xs_[p.material_].get_xs(MgxsType::SCATTER, p.g_last_, &p.g_,
+                              &p.mu_, nullptr);
+    // check if the self-scatter xs is negative
+    // std::cout<<"    scat-group: "<<(p.g_last_+1)<<" to "<<(p.g_+1)<<", sigs_self="<<sigs_self<<"\n";
+    if (sigs_self < 0.0){
+      // adjust sigma_tot for sampling with negative xs
+      p.wgt_ *= -1.0;
+    }
+  }
 
   // Rotate the angle
   p.u() = rotate_angle(p.u(), p.mu_, nullptr, p.current_seed());
@@ -207,6 +242,17 @@ create_fission_sites(Particle& p)
 void
 absorption(Particle& p)
 {
+  double sigs_self = data::mg.macro_xs_[p.material_].get_xs(MgxsType::SCATTER, p.g_, &p.g_,
+                              &p.mu_, nullptr);
+  // check if the self-scatter xs is negative
+  double sigt_tmp;
+  if (sigs_self < 0.0){
+    // adjust sigma_tot for sampling with negative xs
+    sigt_tmp = p.macro_xs_.total - 2.0 * sigs_self;
+  } else{
+    sigt_tmp = p.macro_xs_.total;
+  }
+
   if (settings::survival_biasing) {
     // Determine weight absorbed in survival biasing
     p.wgt_absorb_ = p.wgt_ * p.macro_xs_.absorption / p.macro_xs_.total;
@@ -219,7 +265,8 @@ absorption(Particle& p)
     p.keff_tally_absorption_ += p.wgt_absorb_ * p.macro_xs_.nu_fission /
         p.macro_xs_.absorption;
   } else {
-    if (p.macro_xs_.absorption > prn(p.current_seed()) * p.macro_xs_.total) {
+    // if (p.macro_xs_.absorption > prn(p.current_seed()) * p.macro_xs_.total) {
+    if (p.macro_xs_.absorption > prn(p.current_seed()) * sigt_tmp) {
       p.keff_tally_absorption_ += p.wgt_ * p.macro_xs_.nu_fission /
            p.macro_xs_.absorption;
       p.alive_ = false;

@@ -825,6 +825,8 @@ void Material::calculate_neutron_xs(Particle& p) const
     p.macro_xs_.absorption += atom_density * micro.absorption;
     p.macro_xs_.fission += atom_density * micro.fission;
     p.macro_xs_.nu_fission += atom_density * micro.nu_fission;
+
+    p.macro_xs_.scale_factor = 1.0;
   }
 }
 

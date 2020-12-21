@@ -124,6 +124,8 @@ struct MacroXS {
   double nu_fission;    //!< macroscopic production xs
   double photon_prod;   //!< macroscopic photon production xs
 
+  double scale_factor;  // for mgmc sampling with negative self-scat xs
+
   // Photon cross sections
   double coherent;        //!< macroscopic coherent xs
   double incoherent;      //!< macroscopic incoherent xs
