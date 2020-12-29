@@ -57,16 +57,6 @@ sample_reaction(Particle& p)
     }
   }
 
-  // Read self-scattering cross section
-  double sigs_self = data::mg.macro_xs_[p.material_].get_xs(MgxsType::SCATTER, p.g_, &p.g_,
-                              &p.mu_, nullptr);
-
-  // Check if the self-scatter xs is negative
-  if (sigs_self < 0.0){
-    // adjust the weight to account for sampling with negative xs
-    p.wgt_ *= (p.macro_xs_.total - 2 * sigs_self)/ p.macro_xs_.total;
-  }
-  
   // If survival biasing is being used, the following subroutine adjusts the
   // weight of the particle. Otherwise, it checks to see if absorption occurs.
   if (p.macro_xs_.absorption > 0.) {
@@ -89,12 +79,20 @@ sample_reaction(Particle& p)
 void
 scatter(Particle& p)
 {
+  // Read self-scattering cross section
+  double sigs_self = data::mg.macro_xs_[p.material_].get_xs(MgxsType::SCATTER, p.g_, &p.g_,
+                              &p.mu_, nullptr);
+
+  // Check if the self-scatter xs is negative
+  if (sigs_self < 0.0){
+    // adjust the weight to account for sampling with negative xs
+    p.wgt_ *= (p.macro_xs_.total - p.macro_xs_.absorption - 2 * sigs_self) / (p.macro_xs_.total - p.macro_xs_.absorption);
+  }
+  
   data::mg.macro_xs_[p.material_].sample_scatter(p.g_last_, p.g_, p.mu_,
                                                   p.wgt_, p.current_seed());
 
   if (p.g_last_ == p.g_){
-    double sigs_self = data::mg.macro_xs_[p.material_].get_xs(MgxsType::SCATTER, p.g_last_, &p.g_,
-                              &p.mu_, nullptr);
     // check if the self-scatter xs is negative
     if (sigs_self < 0.0){
       // adjust sigma_tot for sampling with negative xs
@@ -232,17 +230,6 @@ create_fission_sites(Particle& p)
 void
 absorption(Particle& p)
 {
-  double sigs_self = data::mg.macro_xs_[p.material_].get_xs(MgxsType::SCATTER, p.g_, &p.g_,
-                              &p.mu_, nullptr);
-  // check if the self-scatter xs is negative
-  double sigt_tmp;
-  if (sigs_self < 0.0){
-    // adjust sigma_tot for sampling with negative xs
-    sigt_tmp = p.macro_xs_.total - 2.0 * sigs_self;
-  } else{
-    sigt_tmp = p.macro_xs_.total;
-  }
-
   if (settings::survival_biasing) {
     // Determine weight absorbed in survival biasing
     p.wgt_absorb_ = p.wgt_ * p.macro_xs_.absorption / p.macro_xs_.total;
@@ -255,8 +242,7 @@ absorption(Particle& p)
     p.keff_tally_absorption_ += p.wgt_absorb_ * p.macro_xs_.nu_fission /
         p.macro_xs_.absorption;
   } else {
-    // if (p.macro_xs_.absorption > prn(p.current_seed()) * p.macro_xs_.total) {
-    if (p.macro_xs_.absorption > prn(p.current_seed()) * sigt_tmp) {
+    if (p.macro_xs_.absorption > prn(p.current_seed()) * p.macro_xs_.total) {
       p.keff_tally_absorption_ += p.wgt_ * p.macro_xs_.nu_fission /
            p.macro_xs_.absorption;
       p.alive_ = false;
