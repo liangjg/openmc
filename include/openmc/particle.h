@@ -281,6 +281,7 @@ public:
   int g_last_;     //!< pre-collision energy group (MG only)
 
   // Other physical data
+  double wgt0_ {1.0};     //!< original particle weight
   double wgt_ {1.0};     //!< particle weight
   double mu_;      //!< angle of scatter
   bool alive_ {true};     //!< is particle alive?
