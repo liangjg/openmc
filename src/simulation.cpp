@@ -425,6 +425,8 @@ void finalize_generation()
   }
   global_tally_leakage = 0.0;
 
+  std::cerr << "fisbank " << simulation::fission_bank.size() << std::endl;
+
   if (settings::run_mode == RunMode::EIGENVALUE) {
     // If using shared memory, stable sort the fission bank (by parent IDs)
     // so as to allow for reproducibility regardless of which order particles

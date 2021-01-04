@@ -4,6 +4,7 @@
 #include "xtensor/xmath.hpp"
 #include "xtensor/xtensor.hpp"
 #include "xtensor/xview.hpp"
+#include <xtensor/xio.hpp>
 
 #include "openmc/bank.h"
 #include "openmc/capi.h"
@@ -377,6 +378,8 @@ int openmc_get_keff(double* k_combined)
   kv[0] = gt(GlobalTally::K_COLLISION, TallyResult::SUM) / n;
   kv[1] = gt(GlobalTally::K_ABSORPTION, TallyResult::SUM) / n;
   kv[2] = gt(GlobalTally::K_TRACKLENGTH, TallyResult::SUM) / n;
+
+  std::cerr << kv[0] << " " << kv[1] << " " << kv[2] << std::endl;
   cov(0, 0) = (gt(GlobalTally::K_COLLISION, TallyResult::SUM_SQ) - n*kv[0]*kv[0]) / (n - 1);
   cov(1, 1) = (gt(GlobalTally::K_ABSORPTION, TallyResult::SUM_SQ) - n*kv[1]*kv[1]) / (n - 1);
   cov(2, 2) = (gt(GlobalTally::K_TRACKLENGTH, TallyResult::SUM_SQ) - n*kv[2]*kv[2]) / (n - 1);
@@ -389,6 +392,7 @@ int openmc_get_keff(double* k_combined)
   cov(2, 0) = cov(0, 2);
   cov(2, 1) = cov(1, 2);
 
+  std::cerr << cov << std::endl;
   // Check to see if two estimators are the same; this is guaranteed to happen
   // in MG-mode with survival biasing when the collision and absorption
   // estimators are the same, but can theoretically happen at anytime.
