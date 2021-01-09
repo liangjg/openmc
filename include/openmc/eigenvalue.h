@@ -56,6 +56,7 @@ void calculate_average_keff();
 //! \return Error status
 extern "C" int openmc_get_keff(double* k_combined);
 
+void cancel_bank();
 //! Sample/redistribute source sites from accumulated fission sites
 void synchronize_bank();
 

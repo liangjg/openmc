@@ -428,6 +428,7 @@ void finalize_generation()
   std::cerr << "fisbank " << simulation::fission_bank.size() << std::endl;
 
   if (settings::run_mode == RunMode::EIGENVALUE) {
+    cancel_bank();
     // If using shared memory, stable sort the fission bank (by parent IDs)
     // so as to allow for reproducibility regardless of which order particles
     // are run in.
@@ -507,7 +508,7 @@ void initialize_history(Particle& p, int64_t index_source)
 
   // Add paricle's starting weight to count for normalizing tallies later
   #pragma omp atomic
-  simulation::total_weight += p.wgt_/p.wgt0_;
+  simulation::total_weight += p.wgt_;
 
   initialize_history_partial(p);
 }

@@ -258,7 +258,7 @@ absorption(Particle& p)
     // if (p.macro_xs_.absorption > prn(p.current_seed()) * p.macro_xs_.total) {
     if (p.macro_xs_.absorption > prn(p.current_seed()) * sigt_tmp) {
       p.keff_tally_absorption_ += p.wgt_ * p.macro_xs_.nu_fission /
-           p.macro_xs_.absorption / p.wgt0_;
+           p.macro_xs_.absorption;
       p.alive_ = false;
       p.event_ = TallyEvent::ABSORB;
     }
