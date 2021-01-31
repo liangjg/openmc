@@ -80,7 +80,7 @@ void cancel_bank()
   auto m = cm.n_bins();
   std::vector<std::vector<int64_t>> pos_ids(m);
   std::vector<std::vector<int64_t>> neg_ids(m);
- 
+
   int n_p = 0;
   int n_n = 0;
 
@@ -114,7 +114,7 @@ void cancel_bank()
   }
   simulation::fission_bank.resize(final_bank.size());
   std::copy(final_bank.begin(), final_bank.end(), simulation::fission_bank.data());
-  std::cerr<<"cancel " << m << " all " << n_p + n_n << " p "<< n_p << " n " << n_n << " final " << final_bank.size()
+  std::cerr<<"cancel bank: bins " << m << " all " << n_p + n_n << " p "<< n_p << " n " << n_n << " final " << final_bank.size()
 	  << "( " << n_p - n_n << ", "<< (n_p + n_n - final_bank.size())/2 << ") fiss " << simulation::fission_bank.size() << std::endl;
 }
 
@@ -209,7 +209,6 @@ void synchronize_bank()
       ++index_temp;
     }
   }
-
   // At this point, the sampling of source sites is done and now we need to
   // figure out where to send source sites. Since it is possible that one
   // processor's share of the source bank spans more than just the immediate

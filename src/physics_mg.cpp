@@ -92,18 +92,25 @@ scatter(Particle& p)
   data::mg.macro_xs_[p.material_].sample_scatter(p.g_last_, p.g_, p.mu_,
                                                   p.wgt_, p.current_seed());
 
-  if (p.g_last_ == p.g_){
-    double sigs_self = data::mg.macro_xs_[p.material_].get_xs(MgxsType::SCATTER, p.g_last_, &p.g_,
-                              &p.mu_, nullptr);
-    // check if the self-scatter xs is negative
-    if (sigs_self < 0.0){
+  if (p.g_last_ == p.g_ && 
+	data::mg.macro_xs_[p.material_].get_xs(MgxsType::SCATTER, p.g_last_, &p.g_, &p.mu_, nullptr) < 0.){
       // adjust sigma_tot for sampling with negative xs
       p.wgt_ *= -1.0;
-    }
   }
-
-  // Rotate the angle
-  p.u() = rotate_angle(p.u(), p.mu_, nullptr, p.current_seed());
+      //p.u() = rotate_angle(p.u(), p.mu_, nullptr, p.current_seed());
+      double mu = 2. * prn(p.current_seed()) - 1.;
+      double phi = 2. * PI * prn(p.current_seed() );
+      p.u().x = mu;
+      p.u().y = std::sqrt(1. - mu * mu) * std::cos(phi);
+      p.u().z = std::sqrt(1. - mu * mu) * std::sin(phi);
+      //p.u() = rotate_angle(p.u(), mu, nullptr, p.current_seed());
+      //double mu2 = 2. * prn(p.current_seed()) - 1.;
+      //p.u() = rotate_angle(p.u(), mu, nullptr, p.current_seed());
+      //p.u() = rotate_angle(p.u(), p.mu_, nullptr, p.current_seed());
+  //} else {
+      // Rotate the angle
+  //    p.u() = rotate_angle(p.u(), p.mu_, nullptr, p.current_seed());
+  //}
 
   // Update energy value for downstream compatability (in tallying)
   p.E_ = data::mg.energy_bin_avg_[p.g_];
