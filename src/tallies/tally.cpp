@@ -978,7 +978,6 @@ accumulate_tallies()
     if (settings::run_mode == RunMode::EIGENVALUE) {
       if (simulation::current_batch > settings::n_inactive) {
         // Accumulate products of different estimators of k
-        std::cerr << settings::n_particles << " " << simulation::total_weight << std::endl;
         double k_col = gt(GlobalTally::K_COLLISION, TallyResult::VALUE) / simulation::total_weight;
         double k_abs = gt(GlobalTally::K_ABSORPTION, TallyResult::VALUE) / simulation::total_weight;
         double k_tra = gt(GlobalTally::K_TRACKLENGTH, TallyResult::VALUE) / simulation::total_weight;

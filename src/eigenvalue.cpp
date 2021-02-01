@@ -4,7 +4,6 @@
 #include "xtensor/xmath.hpp"
 #include "xtensor/xtensor.hpp"
 #include "xtensor/xview.hpp"
-#include <xtensor/xio.hpp>
 
 #include "openmc/bank.h"
 #include "openmc/capi.h"

@@ -114,7 +114,6 @@ Particle::from_source(const Bank* src)
   // Copy attributes from source bank site
   type_ = src->particle;
   wgt_ = src->wgt;
-  wgt0_ = src->wgt;
   wgt_last_ = src->wgt;
   this->r() = src->r;
   this->u() = src->u;
